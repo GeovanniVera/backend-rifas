@@ -455,7 +455,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     @Transactional
-    public void resetPassword(ResetPasswordRequest request) {
+    public void resetPassword(ResetPasswordRequest request, HttpServletRequest httpRequest) {
         String tokenHash = hashToken(request.getToken());
 
         VerificationToken verificationToken = verificationTokenRepository
@@ -476,8 +476,11 @@ public class AuthServiceImpl implements AuthService {
         // Revocar todas las sesiones del usuario
         refreshTokenRepository.revokeAllByUserId(user.getId(), LocalDateTime.now());
 
+        // Registrar evento de auditoría (sin datos sensibles: nunca se loguea la contraseña)
+        auditService.log("PASSWORD_CHANGED", "USER", user.getId(), user.getId(),
+                null, null, httpRequest);
+
         // TODO: Enviar notificación de cambio de contraseña
-        // TODO: Registrar evento de auditoría
         log.info("Contraseña cambiada para usuario: {}", user.getEmail());
     }
 

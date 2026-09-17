@@ -205,9 +205,10 @@ public class AuthController {
      */
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
-            @Valid @RequestBody ResetPasswordRequest request) {
+            @Valid @RequestBody ResetPasswordRequest request,
+            HttpServletRequest httpRequest) {
 
-        authService.resetPassword(request);
+        authService.resetPassword(request, httpRequest);
 
         return ResponseEntity.ok(ApiResponse.ok("Contraseña actualizada correctamente"));
     }

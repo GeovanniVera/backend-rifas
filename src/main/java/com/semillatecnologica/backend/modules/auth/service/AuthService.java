@@ -97,8 +97,9 @@ public interface AuthService {
      * Restablece la contraseña con un token de recuperación.
      *
      * @param request Token y nueva contraseña
+     * @param httpRequest Solicitud HTTP para IP y User-Agent del evento de auditoría
      */
-    void resetPassword(ResetPasswordRequest request);
+    void resetPassword(ResetPasswordRequest request, HttpServletRequest httpRequest);
 
     /**
      * Verifica el correo electrónico con un token.

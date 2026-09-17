@@ -22,10 +22,13 @@ import java.time.LocalDateTime;
  *
  * <p>Los registros son inmutables — solo se pueden consultar, no modificar.</p>
  *
- * <p>Alcance por permisos:
+ * <p>Endpoints separados por alcance (anti-IDOR):
  * <ul>
- *   <li>{@code audit.read} → ve todos los eventos</li>
- *   <li>{@code audit.read-mine} → ve solo sus propios eventos (actorId = usuario actual)</li>
+ *   <li>{@code GET /admin/audit-logs} → solo {@code audit.read}; ve todos los eventos
+ *       y puede filtrar por {@code actorId} de cualquier usuario.</li>
+ *   <li>{@code GET /admin/audit-logs/mine} → {@code audit.read} o {@code audit.read-mine};
+ *       ve únicamente sus propios eventos. El {@code actorId} se fija al usuario
+ *       autenticado y no acepta un actor externo.</li>
  * </ul>
  */
 @RestController
@@ -37,26 +40,24 @@ public class AdminAuditController {
     private final AuditLogRepository auditLogRepository;
 
     /**
-     * Lista eventos de auditoría con filtros opcionales.
+     * Lista todos los eventos de auditoría (solo {@code audit.read}).
      *
-     * <p>Si el usuario tiene {@code audit.read} ve todos los eventos.
-     * Si solo tiene {@code audit.read-mine}, se fuerza el filtro
-     * {@code actorId = usuario actual}.</p>
+     * <p>Permite filtrar por {@code actorId} de cualquier usuario: quien llega
+     * a este endpoint ya tiene permiso para ver todo.</p>
      *
      * @param action Filtrar por tipo de acción
-     * @param actorId Filtrar por ID del actor (ignorado si solo tiene audit.read-mine)
+     * @param actorId Filtrar por ID del actor
      * @param entityType Filtrar por tipo de entidad
      * @param entityId Filtrar por ID de la entidad
      * @param from Fecha inicio (ISO 8601)
      * @param to Fecha fin (ISO 8601)
      * @param pageable Parámetros de paginación
-     * @param authentication Usuario autenticado
      * @return Página de eventos de auditoría
      */
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('audit.read', 'audit.read-mine')")
-    @Operation(summary = "Consultar auditoría",
-               description = "Requiere `audit.read` (todo) o `audit.read-mine` (solo lo propio).")
+    @PreAuthorize("hasAuthority('audit.read')")
+    @Operation(summary = "Consultar auditoría completa",
+               description = "Requiere `audit.read`. Ve todos los eventos y puede filtrar por actor.")
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> listAuditLogs(
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String actorId,
@@ -64,24 +65,50 @@ public class AdminAuditController {
             @RequestParam(required = false) String entityId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
-            Pageable pageable,
-            Authentication authentication) {
-
-        boolean canSeeAll = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("audit.read"));
-
-        // Si solo puede ver lo propio, forzar actorId = usuario actual
-        String effectiveActorId = actorId;
-        if (!canSeeAll) {
-            effectiveActorId = authentication.getName();
-        }
+            Pageable pageable) {
 
         Page<AuditLog> logs = auditLogRepository.findWithFilters(
-                action, effectiveActorId, entityType, entityId, from, to, pageable);
+                action, actorId, entityType, entityId, from, to, pageable);
 
         Page<AuditLogResponse> response = logs.map(this::toResponse);
 
         return ResponseEntity.ok(ApiResponse.ok("Eventos de auditoría", response));
+    }
+
+    /**
+     * Lista únicamente los eventos del usuario autenticado.
+     *
+     * <p>El {@code actorId} se fija al usuario actual: no acepta un actor
+     * externo, evitando IDOR incluso si el cliente lo intenta.</p>
+     *
+     * @param action Filtrar por tipo de acción
+     * @param entityType Filtrar por tipo de entidad
+     * @param entityId Filtrar por ID de la entidad
+     * @param from Fecha inicio (ISO 8601)
+     * @param to Fecha fin (ISO 8601)
+     * @param pageable Parámetros de paginación
+     * @param authentication Usuario autenticado
+     * @return Página de eventos del usuario actual
+     */
+    @GetMapping("/mine")
+    @PreAuthorize("hasAnyAuthority('audit.read', 'audit.read-mine')")
+    @Operation(summary = "Consultar mi actividad",
+               description = "Requiere `audit.read` o `audit.read-mine`. Ve solo sus propios eventos.")
+    public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> listMyAuditLogs(
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) String entityId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            Pageable pageable,
+            Authentication authentication) {
+
+        Page<AuditLog> logs = auditLogRepository.findWithFilters(
+                action, authentication.getName(), entityType, entityId, from, to, pageable);
+
+        Page<AuditLogResponse> response = logs.map(this::toResponse);
+
+        return ResponseEntity.ok(ApiResponse.ok("Mi actividad", response));
     }
 
     private AuditLogResponse toResponse(AuditLog log) {
