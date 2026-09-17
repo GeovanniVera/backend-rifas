@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Perfil DEV: formato limpio para desarrollador -->
+    <springProfile name="dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <!-- Formato: timestamp [LEVEL] class - mensaje -->
+                <pattern>%d{HH:mm:ss.SSS} [%highlight(%-5level)] %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <!-- Nuestro paquete: DEBUG -->
+        <logger name="com.semillatecnologica" level="DEBUG" />
+
+        <!-- Ruido silenciado -->
+        <logger name="org.hibernate.SQL" level="WARN" />
+        <logger name="org.hibernate.orm.jdbc.bind" level="WARN" />
+        <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="WARN" />
+        <logger name="org.springframework.security" level="WARN" />
+        <logger name="org.springframework.web.servlet" level="INFO" />
+        <logger name="com.zaxxer.hikari" level="WARN" />
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+        </root>
+    </springProfile>
+
+    <!-- Perfil PROD: JSON estructurado para plataforma externa -->
+    <springProfile name="prod">
+        <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>service</includeMdcKeyName>
+                <includeMdcKeyName>environment</includeMdcKeyName>
+                <fieldNames>
+                    <timestamp>timestamp</timestamp>
+                    <level>level</level>
+                    <logger>logger</logger>
+                    <message>message</message>
+                    <stacktrace>error</stacktrace>
+                </fieldNames>
+            </encoder>
+        </appender>
+
+        <logger name="com.semillatecnologica" level="INFO" />
+        <logger name="org.hibernate.SQL" level="WARN" />
+        <logger name="org.hibernate.orm.jdbc.bind" level="WARN" />
+        <logger name="org.springframework.security" level="WARN" />
+
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE" />
+        </root>
+    </springProfile>
+
+</configuration>

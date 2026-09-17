@@ -1,0 +1,32 @@
+# Perfil DEV — desarrollo local con Docker
+
+# JWT dev — segura para desarrollo, NO usar en producción
+auth:
+  jwt:
+    secret: ZGV2LXNlY3JldC1rZXktMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODk=
+    access-token-expiration: 900
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tienda_rifas_db
+    username: tienda_rifas_user
+    password: tienda_rifas_pass
+    hikari:
+      maximum-pool-size: 5
+
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+
+  devtools:
+    restart:
+      enabled: true
+    live-reload:
+      enabled: true
+
+logging:
+  level:
+    com.semillatecnologica: DEBUG
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN

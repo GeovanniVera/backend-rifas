@@ -1,0 +1,32 @@
+# Perfil TEST — tests unitarios y de integración
+
+# JWT test — clave fija para tests reproducibles
+auth:
+  jwt:
+    secret: dGVzdC1zZWNyZXQta2V5LTEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5
+    access-token-expiration: 900
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tienda_rifas_test
+    username: tienda_rifas_user
+    password: tienda_rifas_pass
+    hikari:
+      maximum-pool-size: 2
+
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+
+  flyway:
+    locations: classpath:db/migration
+
+  test:
+    database:
+      replace: none
+
+logging:
+  level:
+    com.semillatecnologica: WARN
+    org.springframework: WARN

@@ -1,0 +1,108 @@
+spring:
+  application:
+    name: backend
+
+  # Perfil activo por defecto (se sobreescribe con SPRING_PROFILES_ACTIVE)
+  profiles:
+    active: dev
+
+  # Flyway
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # JPA
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+    defer-datasource-initialization: false
+
+  # Jackson
+  jackson:
+    default-property-inclusion: non_null
+
+  # Mail
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# Auditoría
+audit:
+  enabled: true
+
+# Notificaciones
+notifications:
+  email:
+    from: ${MAIL_FROM:noreply@tiendarifas.com}
+    verification:
+      base-url: ${VERIFICATION_BASE_URL:http://localhost:5173/verify-email/confirm}
+      token-expiration-hours: 24
+    password-reset:
+      base-url: ${PASSWORD_RESET_BASE_URL:http://localhost:5173/reset-password}
+
+# Almacenamiento de archivos
+storage:
+  target: ${STORAGE_TARGET:LOCAL}
+  local:
+    base-path: ${STORAGE_LOCAL_PATH:${user.dir}/uploads}
+    public-base-url: ${STORAGE_LOCAL_PUBLIC_URL:http://localhost:8080}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    folder: ${CLOUDINARY_FOLDER:backend}
+
+# Pagos
+payments:
+  gateway: ${PAYMENTS_GATEWAY:IN_MEMORY}
+  stripe:
+    secret-key: ${STRIPE_SECRET_KEY:}
+  paypal:
+    client-id: ${PAYPAL_CLIENT_ID:}
+    client-secret: ${PAYPAL_CLIENT_SECRET:}
+    mode: ${PAYPAL_MODE:sandbox}
+
+# Server
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+
+# SpringDoc
+springdoc:
+  api-docs:
+    path: /docs
+  swagger-ui:
+    path: /docs/swagger
+
+# JWT — la clave real va por variable de entorno en prod
+auth:
+  jwt:
+    secret: ${JWT_SECRET:cambia-esta-clave-en-produccion-debe-ser-larga-y-aleatoria}
+    access-token-expiration: 900
+    issuer: backend
+  cookie:
+    name: refresh_token
+    path: /api/auth
+    max-age: 604800
+    secure: true
+    http-only: true
+    same-site: Lax
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173
+
+# Logging se configura en logback-spring.xml

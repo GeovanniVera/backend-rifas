@@ -1,0 +1,39 @@
+# Perfil PROD — producción
+
+# JWT prod — OBLIGATORIO desde variable de entorno
+auth:
+  jwt:
+    secret: ${JWT_SECRET}  # DEBE definirse en el entorno
+    access-token-expiration: 900
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+
+  devtools:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.semillatecnologica: INFO
+    org.springframework.security: INFO
+
+  # En prod los logs van a stdout en JSON para recolección externa
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
