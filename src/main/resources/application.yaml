@@ -106,3 +106,8 @@ auth:
     allowed-origins: http://localhost:3000,http://localhost:5173
 
 # Logging se configura en logback-spring.xml
+
+app:
+  raffles:
+    ticket-rate: 0.07         # Tasa por boleto sobre el costo base (ej. 0.07 = 7%)
+    min-ticket-price: 1.00    # Precio mínimo permitido por boleto en MXN

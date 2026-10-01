@@ -12,6 +12,7 @@ import com.semillatecnologica.backend.shared.exception.ValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,21 +26,28 @@ import java.util.UUID;
 /**
  * Servicio de rifas.
  *
- * <p>Al crear una rifa se aparta el producto del stock de venta (stock = 0).
- * El precio por boleto se calcula con {@link BigDecimal}:
- * {@code ticketPrice = (product.price × (1 + margin/100)) / ticketCount}</p>
+ * <p>
+ * Al crear una rifa se aparta el producto del stock de venta (stock = 0).
+ * El precio por boleto se calcula aplicando la regla RN-RIFA-001 (7% del costo,
+ * 29 boletos fijos).
+ * </p>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class RaffleService {
 
-    private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
-
     private final RaffleRepository raffleRepository;
     private final ProductRepository productRepository;
     private final StorageService storageService;
     private final AuditService auditService;
+
+    // Configuración inyectada desde application.yaml
+    @Value("${app.raffles.ticket-rate:0.07}")
+    private BigDecimal ticketRate;
+
+    @Value("${app.raffles.min-ticket-price:1.00}")
+    private BigDecimal minTicketPrice;
 
     /**
      * Lista rifas activas (tienda pública).
@@ -72,21 +80,16 @@ public class RaffleService {
     }
 
     /**
-     * Crea una rifa a partir de un producto.
+     * Crea una rifa a partir de un producto (Regla RN-RIFA-001).
      *
-     * <p>El producto debe tener stock. Se aparta del stock de venta
-     * y se calcula el precio por boleto con margen configurable.</p>
+     * <p>
+     * El producto debe tener stock. Se aparta del stock de venta (stock = 0)
+     * y el precio del boleto se calcula en base a la tasa configurada. La cantidad
+     * de boletos (N) se calcula dinámicamente como ceil(2 / ticketRate).
+     * </p>
      */
     @Transactional
-    public RaffleResponse create(String productId, BigDecimal marginPercent, int ticketCount,
-                                  String userId, HttpServletRequest request) {
-        if (ticketCount <= 0) {
-            throw new ValidationException("La cantidad de boletos debe ser mayor a cero");
-        }
-        if (marginPercent == null || marginPercent.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ValidationException("El margen no puede ser negativo");
-        }
-
+    public RaffleResponse create(String productId, String userId, HttpServletRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Producto"));
 
@@ -94,18 +97,26 @@ public class RaffleService {
             throw new ValidationException("El producto no tiene stock para rifar");
         }
 
-        // Cálculo con BigDecimal: (price × (1 + margin/100)) / ticketCount
-        BigDecimal total = product.getPrice()
-                .multiply(BigDecimal.ONE.add(marginPercent.divide(ONE_HUNDRED, 4, RoundingMode.HALF_UP)));
-        BigDecimal ticketPrice = total.divide(BigDecimal.valueOf(ticketCount), 2, RoundingMode.HALF_UP);
+        // Cálculo dinámico de total de boletos: ceil(2.0 / ticketRate)
+        int totalTickets = (int) Math.ceil(2.0 / ticketRate.doubleValue());
+
+        // Cálculo del precio por boleto (redondeado a entero)
+        BigDecimal ticketPrice = product.getPrice()
+                .multiply(ticketRate)
+                .setScale(0, RoundingMode.HALF_UP);
+
+        if (ticketPrice.compareTo(minTicketPrice) < 0) {
+            throw new ValidationException("El precio del boleto no puede ser menor a $" + minTicketPrice + " MXN");
+        }
 
         Raffle raffle = Raffle.builder()
                 .id(UUID.randomUUID().toString())
                 .productId(product.getId())
                 .name("Rifa — " + product.getName())
-                .description("Rifá tu " + product.getName() + " por boletos. El producto se aparta del stock de venta.")
-                .marginPercent(marginPercent)
-                .ticketCount(ticketCount)
+                .description(
+                        "Rifa de " + product.getName() + " (" + totalTickets + " boletos de $" + ticketPrice + " MXN)")
+                .marginPercent(new BigDecimal("100.00"))
+                .ticketCount(totalTickets)
                 .ticketPrice(ticketPrice)
                 .status(Raffle.Status.ACTIVE)
                 .build();
@@ -119,8 +130,8 @@ public class RaffleService {
         auditService.log("RAFFLE_CREATED", "RAFFLE", raffle.getId(), userId,
                 null, raffleToMap(raffle), request);
 
-        log.info("Rifa creada: {} — ${} por boleto, {} boletos",
-                raffle.getName(), ticketPrice, ticketCount);
+        log.info("Rifa creada (RN-RIFA-001): {} — ${} por boleto, {} boletos",
+                raffle.getName(), ticketPrice, totalTickets);
 
         return toResponse(raffle);
     }
@@ -130,7 +141,7 @@ public class RaffleService {
      */
     @Transactional
     public RaffleResponse changeStatus(String id, Raffle.Status newStatus,
-                                        String userId, HttpServletRequest request) {
+            String userId, HttpServletRequest request) {
         Raffle raffle = findById(id);
         Raffle.Status oldStatus = raffle.getStatus();
 
@@ -148,22 +159,17 @@ public class RaffleService {
 
     /**
      * Valida las transiciones de estado permitidas.
-     *
-     * <ul>
-     *   <li>ACTIVE → DRAW: avanza a sorteo</li>
-     *   <li>ACTIVE → CANCELLED: solo si NO hay boletos vendidos</li>
-     *   <li>DRAW → FINISHED: sorteo realizado</li>
-     *   <li>FINISHED / CANCELLED: terminales, no se cambian</li>
-     * </ul>
      */
     private void validateStatusTransition(Raffle raffle, Raffle.Status newStatus) {
         Raffle.Status current = raffle.getStatus();
 
-        if (current == newStatus) return;
+        if (current == newStatus)
+            return;
 
         switch (current) {
             case ACTIVE -> {
-                if (newStatus == Raffle.Status.DRAW) return;
+                if (newStatus == Raffle.Status.DRAW)
+                    return;
                 if (newStatus == Raffle.Status.CANCELLED) {
                     if (raffle.getTicketsSold() > 0) {
                         throw new ValidationException(
@@ -174,13 +180,14 @@ public class RaffleService {
                 throw new ValidationException("Transición inválida desde ACTIVE: " + newStatus);
             }
             case DRAW -> {
-                if (newStatus == Raffle.Status.FINISHED) return;
+                if (newStatus == Raffle.Status.FINISHED)
+                    return;
                 throw new ValidationException(
                         "Una rifa en sorteo solo puede avanzar a FINISHED");
             }
             case FINISHED, CANCELLED ->
-                    throw new ValidationException(
-                            "La rifa " + current.name().toLowerCase() + " es un estado terminal");
+                throw new ValidationException(
+                        "La rifa " + current.name().toLowerCase() + " es un estado terminal");
         }
     }
 
