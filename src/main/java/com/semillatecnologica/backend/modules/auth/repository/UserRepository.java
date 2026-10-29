@@ -34,6 +34,11 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean existsByEmail(String email);
 
     /**
+     * Obtiene todos los usuarios verificados.
+     */
+    java.util.List<User> findByIsVerifiedTrue();
+
+    /**
      * Carga un usuario con sus roles y permisos para autenticación.
      *
      * @param email Email del usuario

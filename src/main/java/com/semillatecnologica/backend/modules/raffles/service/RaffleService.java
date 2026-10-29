@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,6 +42,8 @@ public class RaffleService {
     private final ProductRepository productRepository;
     private final StorageService storageService;
     private final AuditService auditService;
+    private final com.semillatecnologica.backend.modules.auth.repository.UserRepository userRepository;
+    private final com.semillatecnologica.backend.modules.notification.service.NotificationService notificationService;
 
     // Configuración inyectada desde application.yaml
     @Value("${app.raffles.ticket-rate:0.07}")
@@ -89,12 +92,17 @@ public class RaffleService {
      * </p>
      */
     @Transactional
-    public RaffleResponse create(String productId, String userId, HttpServletRequest request) {
+    public RaffleResponse create(String productId, LocalDateTime drawDate, String userId, HttpServletRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Producto"));
 
         if (product.getStock() <= 0) {
             throw new ValidationException("El producto no tiene stock para rifar");
+        }
+
+        // Regla: Solo una rifa activa o en sorteo por producto
+        if (raffleRepository.existsByProductIdAndStatusIn(productId, List.of(Raffle.Status.ACTIVE, Raffle.Status.DRAW))) {
+            throw new ValidationException("El producto ya tiene una rifa activa o en sorteo");
         }
 
         // Cálculo dinámico de total de boletos: ceil(2.0 / ticketRate)
@@ -118,13 +126,36 @@ public class RaffleService {
                 .marginPercent(new BigDecimal("100.00"))
                 .ticketCount(totalTickets)
                 .ticketPrice(ticketPrice)
+                .drawDate(drawDate)
                 .status(Raffle.Status.ACTIVE)
                 .build();
 
         raffleRepository.save(raffle);
 
-        // Apartar el producto del stock de venta
-        product.setStock(0);
+        // Notificar a todos los clientes verificados sobre la nueva rifa
+        try {
+            var customers = userRepository.findByIsVerifiedTrue();
+            String drawDateFormatted = drawDate != null
+                    ? drawDate.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                    : "Fecha por definir";
+
+            for (var customer : customers) {
+                notificationService.sendNewRaffleNotificationEmail(
+                        customer.getEmail(),
+                        customer.getName(),
+                        raffle.getName(),
+                        ticketPrice.toString(),
+                        totalTickets,
+                        drawDateFormatted,
+                        raffle.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.error("Error al notificar clientes sobre nueva rifa: {}", e.getMessage(), e);
+        }
+
+        // Apartar 1 unidad del stock de venta (Opción A)
+        product.setStock(product.getStock() - 1);
         productRepository.save(product);
 
         auditService.log("RAFFLE_CREATED", "RAFFLE", raffle.getId(), userId,
@@ -149,6 +180,15 @@ public class RaffleService {
 
         raffle.setStatus(newStatus);
         raffleRepository.save(raffle);
+
+        // Si se cancela la rifa, devolver la unidad al stock del producto (Opción A)
+        if (newStatus == Raffle.Status.CANCELLED) {
+            productRepository.findById(raffle.getProductId()).ifPresent(product -> {
+                product.setStock(product.getStock() + 1);
+                productRepository.save(product);
+                log.info("Stock devuelto (+1) al producto {} por cancelación de rifa", product.getName());
+            });
+        }
 
         auditService.log("RAFFLE_STATUS_CHANGED", "RAFFLE", raffle.getId(), userId,
                 Map.of("status", oldStatus.name()), Map.of("status", newStatus.name()), request);
@@ -202,7 +242,21 @@ public class RaffleService {
             throw new ValidationException("No se puede eliminar una rifa en sorteo o finalizada");
         }
 
+        if (raffle.getTicketsSold() > 0) {
+            throw new ValidationException("No se puede eliminar una rifa con boletos vendidos");
+        }
+
         raffleRepository.delete(raffle);
+
+        // Si la rifa eliminada estaba ACTIVE, devolver la unidad al producto (Opción A)
+        // (Si estaba CANCELLED, el stock ya se devolvió al momento de cancelarla)
+        if (raffle.getStatus() == Raffle.Status.ACTIVE) {
+            productRepository.findById(raffle.getProductId()).ifPresent(product -> {
+                product.setStock(product.getStock() + 1);
+                productRepository.save(product);
+                log.info("Stock devuelto (+1) al producto {} por eliminación de rifa", product.getName());
+            });
+        }
 
         auditService.log("RAFFLE_DELETED", "RAFFLE", raffle.getId(), userId,
                 raffleToMap(raffle), null, request);

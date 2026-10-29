@@ -24,6 +24,7 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -156,9 +157,12 @@ public class AuthServiceImpl implements AuthService {
                     "Demasiados registros desde esta dirección. Intentá de nuevo más tarde.");
         }
 
-        if (userRepository.existsByEmail(email)) {
-            // Respuesta opaca: no revelar que el correo ya existe
-            log.debug("Registro intentado con correo existente: {}", email);
+        Optional<User> existingUserOpt = userRepository.findByEmail(email);
+        if (existingUserOpt.isPresent()) {
+            User existing = existingUserOpt.get();
+            // Respuesta opaca al cliente HTTP + aviso educativo al correo real
+            log.info("Registro intentado con correo existente: {}, enviando correo recordatorio", email);
+            notificationService.sendAccountAlreadyRegisteredEmail(email, existing.getName());
             return;
         }
 

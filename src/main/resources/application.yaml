@@ -43,6 +43,8 @@ audit:
 notifications:
   email:
     from: ${MAIL_FROM:noreply@tiendarifas.com}
+    login:
+      base-url: ${LOGIN_BASE_URL:http://localhost:5173/login}
     verification:
       base-url: ${VERIFICATION_BASE_URL:http://localhost:5173/verify-email/confirm}
       token-expiration-hours: 24

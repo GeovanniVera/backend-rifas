@@ -4,6 +4,8 @@ import com.semillatecnologica.backend.modules.admin.service.AuditService;
 import com.semillatecnologica.backend.modules.products.dto.ProductResponse;
 import com.semillatecnologica.backend.modules.products.model.Product;
 import com.semillatecnologica.backend.modules.products.repository.ProductRepository;
+import com.semillatecnologica.backend.modules.raffles.model.Raffle;
+import com.semillatecnologica.backend.modules.raffles.repository.RaffleRepository;
 import com.semillatecnologica.backend.modules.storage.service.StorageService;
 import com.semillatecnologica.backend.shared.exception.NotFoundException;
 import com.semillatecnologica.backend.shared.exception.ValidationException;
@@ -33,6 +35,7 @@ import java.util.UUID;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final RaffleRepository raffleRepository;
     private final StorageService storageService;
     private final AuditService auditService;
 
@@ -129,7 +132,21 @@ public class ProductService {
             product.setPrice(price);
         }
         if (category != null) product.setCategory(category);
-        if (stock != null) product.setStock(stock);
+        if (stock != null) {
+            if (stock < 0) {
+                throw new ValidationException("El stock no puede ser negativo");
+            }
+            if (stock != product.getStock()) {
+                boolean tieneRifaActiva = raffleRepository.existsByProductIdAndStatusIn(
+                        product.getId(), List.of(Raffle.Status.ACTIVE, Raffle.Status.DRAW));
+
+                if (tieneRifaActiva && stock < product.getStock()) {
+                    throw new ValidationException(
+                            "No se puede reducir el stock del producto mientras tenga una rifa activa o en sorteo. Solo se permite reabastecer.");
+                }
+            }
+            product.setStock(stock);
+        }
 
         // Si se provee nueva imagen, subirla y reemplazar la referencia
         if (image != null && !image.isEmpty()) {
@@ -152,6 +169,11 @@ public class ProductService {
     @Transactional
     public void delete(String id, String userId, HttpServletRequest request) {
         Product product = findById(id);
+
+        if (raffleRepository.existsByProductIdAndStatusIn(product.getId(), List.of(Raffle.Status.ACTIVE, Raffle.Status.DRAW))) {
+            throw new ValidationException("No se puede eliminar un producto con rifas activas o en sorteo");
+        }
+
         productRepository.delete(product);
 
         auditService.log("PRODUCT_DELETED", "PRODUCT", product.getId(), userId,

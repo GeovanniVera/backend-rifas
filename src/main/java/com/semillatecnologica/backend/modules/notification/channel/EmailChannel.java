@@ -55,7 +55,7 @@ public class EmailChannel implements INotificationChannel {
             log.info("Email enviado a {}: {}", recipient, subject);
             return DeliveryResult.success(getChannelType(), recipient, null);
 
-        } catch (MessagingException e) {
+        } catch (Exception e) {
             log.error("Error al enviar email a {}: {}", recipient, e.getMessage(), e);
             return DeliveryResult.failure(getChannelType(), recipient, e.getMessage());
         }

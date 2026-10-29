@@ -27,6 +27,8 @@ public class TemplateRenderer {
             case "welcome" -> renderWelcome(variables);
             case "password-reset" -> renderPasswordReset(variables);
             case "password-reset-otp" -> renderPasswordResetOtp(variables);
+            case "account-already-registered" -> renderAccountAlreadyRegistered(variables);
+            case "new-raffle-available" -> renderNewRaffleAvailable(variables);
             default -> throw new IllegalArgumentException("Plantilla no encontrada: " + templateName);
         };
     }
@@ -188,5 +190,100 @@ public class TemplateRenderer {
             </body>
             </html>
             """.formatted(userName, otp);
+    }
+
+    private String renderAccountAlreadyRegistered(Map<String, Object> vars) {
+        String userName = (String) vars.getOrDefault("userName", "Usuario");
+        String loginUrl = (String) vars.getOrDefault("loginUrl", "http://localhost:5173/login");
+        String forgotPasswordUrl = (String) vars.getOrDefault("forgotPasswordUrl", "http://localhost:5173/forgot-password");
+
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background-color: #3b82f6; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                    .content { padding: 25px; background-color: #f9f9f9; border: 1px solid #e5e7eb; border-top: none; }
+                    .button { display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 10px 5px; }
+                    .button-secondary { display: inline-block; padding: 12px 24px; background-color: #e5e7eb; color: #374151; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 10px 5px; }
+                    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Ya tienes una cuenta</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hola %s,</p>
+                        <p>Recibimos una solicitud para registrar una nueva cuenta con este correo en <strong>TiendaRifas</strong>.</p>
+                        <p>Como ya tienes una cuenta registrada con nosotros, no es necesario registrarte de nuevo. Puedes iniciar sesión directamente o restablecer tu contraseña si no la recuerdas:</p>
+                        <p style="text-align: center; margin: 30px 0;">
+                            <a href="%s" class="button">Iniciar Sesión</a>
+                            <a href="%s" class="button-secondary">Recuperar Contraseña</a>
+                        </p>
+                        <p style="font-size: 13px; color: #6b7280;">Si no intentaste registrarte, puedes ignorar este mensaje de forma segura. Tu cuenta continúa protegida.</p>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 TiendaRifas. Todos los derechos reservados.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(userName, loginUrl, forgotPasswordUrl);
+    }
+
+    private String renderNewRaffleAvailable(Map<String, Object> vars) {
+        String userName = (String) vars.getOrDefault("userName", "Cliente");
+        String raffleName = (String) vars.getOrDefault("raffleName", "Nueva Rifa");
+        String ticketPrice = (String) vars.getOrDefault("ticketPrice", "0");
+        int totalTickets = (int) vars.getOrDefault("totalTickets", 0);
+        String drawDate = (String) vars.getOrDefault("drawDate", "Por definir");
+        String raffleUrl = (String) vars.getOrDefault("raffleUrl", "http://localhost:5173");
+
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background-color: #10b981; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                    .content { padding: 25px; background-color: #f9f9f9; border: 1px solid #e5e7eb; border-top: none; }
+                    .box { background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 20px 0; }
+                    .button { display: inline-block; padding: 12px 24px; background-color: #10b981; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; }
+                    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>¡Nueva Rifa Disponible!</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hola %s,</p>
+                        <p>Nos emociona contarte que se ha publicado una nueva rifa en <strong>TiendaRifas</strong>:</p>
+                        <div class="box">
+                            <h3 style="margin-top:0; color: #111;">%s</h3>
+                            <p style="margin: 5px 0;">🎟️ <strong>Total de boletos:</strong> %d boletos</p>
+                            <p style="margin: 5px 0;">💲 <strong>Costo por boleto:</strong> $%s MXN</p>
+                            <p style="margin: 5px 0;">📅 <strong>Fecha del sorteo:</strong> %s</p>
+                        </div>
+                        <p style="text-align: center; margin: 30px 0;">
+                            <a href="%s" class="button">Ver Rifa en la Tienda</a>
+                        </p>
+                        <p style="font-size: 13px; color: #6b7280;">La venta de boletos comenzará muy pronto. ¡Entra a conocer el producto y prepárate para participar!</p>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 TiendaRifas. Todos los derechos reservados.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(userName, raffleName, totalTickets, ticketPrice, drawDate, raffleUrl);
     }
 }

@@ -22,6 +22,7 @@ public record RaffleResponse(
     int ticketsSold,
     BigDecimal ticketPrice,
     Raffle.Status status,
+    LocalDateTime drawDate,
     LocalDateTime createdAt
 ) {
     public static RaffleResponse from(Raffle raffle, String productName, String productImageUrl) {
@@ -37,6 +38,7 @@ public record RaffleResponse(
                 raffle.getTicketsSold(),
                 raffle.getTicketPrice(),
                 raffle.getStatus(),
+                raffle.getDrawDate(),
                 raffle.getCreatedAt()
         );
     }
