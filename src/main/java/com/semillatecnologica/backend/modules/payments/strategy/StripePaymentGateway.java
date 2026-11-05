@@ -23,7 +23,7 @@ import java.util.Map;
  * <p>Requiere configuración de {@code payments.stripe.secret-key}.</p>
  */
 @Component
-@Profile({"stripe", "prod"})
+@Profile({"dev", "stripe", "prod"})
 @Slf4j
 public class StripePaymentGateway implements IPaymentGateway {
 
