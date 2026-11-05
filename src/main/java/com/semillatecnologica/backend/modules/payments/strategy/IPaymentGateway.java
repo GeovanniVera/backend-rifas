@@ -45,6 +45,14 @@ public interface IPaymentGateway {
     VerifiedPaymentEvent verifyWebhook(String rawBody, java.util.Map<String, String> headers);
 
     /**
+     * Verifica si un pago fue completado con éxito en el proveedor.
+     *
+     * @param paymentId Identificador del pago en el gateway (ej: PaymentIntent ID de Stripe)
+     * @return true si el pago está acreditado exitosamente, false en caso contrario
+     */
+    boolean isPaymentSuccessful(String paymentId);
+
+    /**
      * Retorna el nombre del gateway.
      */
     String getGatewayName();

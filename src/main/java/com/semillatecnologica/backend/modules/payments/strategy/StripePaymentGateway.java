@@ -58,7 +58,7 @@ public class StripePaymentGateway implements IPaymentGateway {
                     .putAllMetadata(command.metadata() != null ? command.metadata() : Map.of())
                     .setAutomaticPaymentMethods(
                             PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
-                                    .setEnabled(true)
+                                     .setEnabled(true)
                                     .build()
                     )
                     .build();
@@ -145,6 +145,22 @@ public class StripePaymentGateway implements IPaymentGateway {
         } catch (Exception e) {
             log.error("Stripe: webhook inválido — {}", e.getMessage());
             return null;
+        }
+    }
+
+    @Override
+    public boolean isPaymentSuccessful(String paymentId) {
+        if (client == null) {
+            throw new RuntimeException("Stripe no está configurado");
+        }
+
+        try {
+            PaymentIntent intent = client.v1().paymentIntents().retrieve(paymentId);
+            log.info("Stripe: verificación de pago {} — status={}", paymentId, intent.getStatus());
+            return "succeeded".equalsIgnoreCase(intent.getStatus());
+        } catch (StripeException e) {
+            log.error("Stripe: error al recuperar PaymentIntent {}: {}", paymentId, e.getMessage());
+            return false;
         }
     }
 

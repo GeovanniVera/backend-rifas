@@ -158,6 +158,32 @@ public class PaymentService {
     }
 
     /**
+     * Verifica si un pago fue completado con éxito en el gateway proveedor.
+     * Si es exitoso, actualiza el estado local del pago a COMPLETED.
+     *
+     * @param gatewayId Identificador del pago en el gateway (ej: PaymentIntent ID de Stripe)
+     * @return true si el pago está exitosamente acreditado
+     */
+    @Transactional
+    public boolean isPaymentSuccessful(String gatewayId) {
+        IPaymentGateway gateway = gatewayFactory.resolve()
+                .orElseThrow(() -> new RuntimeException("No hay gateway de pago configurado"));
+
+        boolean successful = gateway.isPaymentSuccessful(gatewayId);
+        if (successful) {
+            paymentRepository.findByGatewayId(gatewayId).ifPresent(payment -> {
+                if (!"COMPLETED".equalsIgnoreCase(payment.getStatus())) {
+                    payment.setStatus("COMPLETED");
+                    payment.setPaidAt(LocalDateTime.now());
+                    paymentRepository.save(payment);
+                    log.info("Pago {} marcado como COMPLETED tras verificación del gateway", gatewayId);
+                }
+            });
+        }
+        return successful;
+    }
+
+    /**
      * Retorna un pago por ID.
      */
     @Transactional(readOnly = true)

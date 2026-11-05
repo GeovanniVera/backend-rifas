@@ -216,6 +216,28 @@ public class RaffleTicketService {
         }
 
         RaffleTicket sampleTicket = tickets.get(0);
+
+        // Seguridad 1: Prevenir IDOR - El usuario autenticado debe ser quien reservó los boletos
+        if (sampleTicket.getUserId() == null || !sampleTicket.getUserId().equals(userId)) {
+            log.warn("Intento de confirmación no autorizado (IDOR): usuario autenticado={} usuario de la reserva={}",
+                    userId, sampleTicket.getUserId());
+            throw new ValidationException("No tienes autorización para confirmar esta reserva de boletos");
+        }
+
+        // Idempotencia: Si ya fueron confirmados y vendidos para este usuario, retornar sin duplicar conteos
+        if (sampleTicket.getStatus() == RaffleTicket.Status.SOLD) {
+            return tickets.stream()
+                    .map(t -> RaffleTicketResponse.from(t, userId))
+                    .collect(Collectors.toList());
+        }
+
+        // Seguridad 2: Verificar con Stripe / Pasarela que el cobro esté realmente liquidado/succeeded
+        boolean paymentSuccessful = paymentService.isPaymentSuccessful(paymentIntentId);
+        if (!paymentSuccessful) {
+            log.warn("Confirmación rechazada: el pago {} no está liquidado en la pasarela de pagos", paymentIntentId);
+            throw new ValidationException("El pago no ha sido acreditado por Stripe o se encuentra pendiente de acreditación");
+        }
+
         Raffle raffle = raffleRepository.findById(sampleTicket.getRaffleId())
                 .orElseThrow(() -> new NotFoundException("Rifa"));
 
