@@ -54,6 +54,9 @@ public class Raffle {
     @Column(name = "ticket_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal ticketPrice;
 
+    @Column(name = "draw_date")
+    private LocalDateTime drawDate;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

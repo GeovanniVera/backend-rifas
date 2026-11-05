@@ -42,6 +42,9 @@ public class NotificationService {
     @Value("${notifications.email.password-reset.base-url}")
     private String passwordResetBaseUrl;
 
+    @Value("${notifications.email.login.base-url:http://localhost:5173/login}")
+    private String loginBaseUrl;
+
     /**
      * Envía una notificación por el canal especificado.
      *
@@ -123,6 +126,46 @@ public class NotificationService {
         );
 
         notify("EMAIL", to, subject, "password-reset-otp", variables);
+    }
+
+
+    /**
+     * Envía email informando que la cuenta ya existe al intentar registrarse nuevamente.
+     */
+    @Async
+    public void sendAccountAlreadyRegisteredEmail(String to, String userName) {
+        String subject = "Intento de registro - Ya tienes una cuenta en TiendaRifas";
+        String forgotPasswordUrl = passwordResetBaseUrl.replace("/reset-password", "/forgot-password");
+
+        Map<String, Object> variables = Map.of(
+                "userName", userName,
+                "loginUrl", loginBaseUrl,
+                "forgotPasswordUrl", forgotPasswordUrl
+        );
+
+        notify("EMAIL", to, subject, "account-already-registered", variables);
+    }
+
+
+    /**
+     * Envía email notificando a un cliente sobre una nueva rifa disponible.
+     */
+    @Async
+    public void sendNewRaffleNotificationEmail(String to, String userName, String raffleName,
+                                              String ticketPrice, int totalTickets, String drawDate, String raffleId) {
+        String subject = "¡Nueva rifa disponible: " + raffleName + "!";
+        String raffleUrl = "http://localhost:5173/rifa/" + raffleId;
+
+        Map<String, Object> variables = Map.of(
+                "userName", userName,
+                "raffleName", raffleName,
+                "ticketPrice", ticketPrice,
+                "totalTickets", totalTickets,
+                "drawDate", drawDate != null ? drawDate : "Por definir",
+                "raffleUrl", raffleUrl
+        );
+
+        notify("EMAIL", to, subject, "new-raffle-available", variables);
     }
 
     // =====================================================================

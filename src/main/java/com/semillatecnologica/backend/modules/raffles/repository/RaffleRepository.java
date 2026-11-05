@@ -4,6 +4,7 @@ import com.semillatecnologica.backend.modules.raffles.model.Raffle;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -21,4 +22,9 @@ public interface RaffleRepository extends JpaRepository<Raffle, String> {
      * Rifas de un producto.
      */
     List<Raffle> findByProductIdOrderByCreatedAtDesc(String productId);
+
+    /**
+     * Verifica si existe alguna rifa para un producto en los estados indicados (ej. ACTIVE, DRAW).
+     */
+    boolean existsByProductIdAndStatusIn(String productId, Collection<Raffle.Status> statuses);
 }
