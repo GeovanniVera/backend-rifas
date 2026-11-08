@@ -47,8 +47,9 @@ public class InMemoryPaymentGateway implements IPaymentGateway {
         );
 
         payments.put(paymentId, intent);
-        log.info("InMemory: pago creado — id={} amount={} {} status=COMPLETED",
-                paymentId, command.amount(), command.currency());
+        payments.put(gatewayId, intent);
+        log.info("InMemory: pago creado — id={} gatewayId={} amount={} {} status=COMPLETED",
+                paymentId, gatewayId, command.amount(), command.currency());
 
         return intent;
     }
@@ -76,6 +77,16 @@ public class InMemoryPaymentGateway implements IPaymentGateway {
                 "USD",
                 Map.of("test", "true")
         );
+    }
+
+    @Override
+    public boolean isPaymentSuccessful(String paymentId) {
+        PaymentIntent intent = payments.get(paymentId);
+        if (intent != null) {
+            return "COMPLETED".equalsIgnoreCase(intent.status()) || "succeeded".equalsIgnoreCase(intent.status());
+        }
+        // En entorno inmemory, considerar exitosos identificadores de prueba
+        return true;
     }
 
     @Override

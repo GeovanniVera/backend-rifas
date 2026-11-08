@@ -55,29 +55,12 @@ public class PaymentService {
     @Transactional
     public PaymentIntent createPayment(String userId, long amount, String currency,
                                         String description, Map<String, String> metadata) {
-        // 1. Generar idempotency key única
-        String idempotencyKey = UUID.randomUUID().toString();
-
-        // 2. Verificar si ya existe un pago con esta key (protección contra retry)
-        // (En producción, esto sería un índice único en la DB)
-
-        // 3. Crear el pago local con estado PENDING
-        Payment payment = Payment.builder()
-                .id(UUID.randomUUID().toString())
-                .userId(userId)
-                .idempotencyKey(idempotencyKey)
-                .amount(amount)
-                .currency(currency)
-                .status("PENDING")
-                .description(description)
-                .metadataJson(metadata)
-                .build();
-
-        payment = paymentRepository.save(payment);
-
-        // 4. Delegar al gateway configurado
+        // 1. Delegar al gateway configurado
         IPaymentGateway gateway = gatewayFactory.resolve()
                 .orElseThrow(() -> new RuntimeException("No hay gateway de pago configurado"));
+
+        // 2. Generar idempotency key única
+        String idempotencyKey = UUID.randomUUID().toString();
 
         CreatePaymentCommand command = new CreatePaymentCommand(
                 amount, currency, description, userId, metadata
@@ -85,16 +68,22 @@ public class PaymentService {
 
         PaymentIntent intent = gateway.createPaymentIntent(command);
 
-        // 5. Actualizar el pago local con la respuesta del gateway
-        payment.setGatewayId(intent.gatewayId());
-        payment.setGateway(intent.gateway());
-        payment.setStatus(intent.status());
+        // 3. Crear y persistir el pago local con gateway asignado (evita violación de NOT NULL)
+        Payment payment = Payment.builder()
+                .id(UUID.randomUUID().toString())
+                .userId(userId)
+                .gateway(intent.gateway())
+                .gatewayId(intent.gatewayId())
+                .idempotencyKey(idempotencyKey)
+                .amount(amount)
+                .currency(currency)
+                .status(intent.status())
+                .description(description)
+                .metadataJson(metadata)
+                .paidAt("COMPLETED".equals(intent.status()) ? LocalDateTime.now() : null)
+                .build();
 
-        if ("COMPLETED".equals(intent.status())) {
-            payment.setPaidAt(LocalDateTime.now());
-        }
-
-        paymentRepository.save(payment);
+        payment = paymentRepository.save(payment);
 
         log.info("Pago creado: userId={} amount={} {} gateway={} status={}",
                 userId, amount, currency, intent.gateway(), intent.status());
@@ -166,6 +155,32 @@ public class PaymentService {
         paymentRepository.save(payment);
 
         log.info("Estado actualizado por webhook: paymentId={} status={}", payment.getId(), event.status());
+    }
+
+    /**
+     * Verifica si un pago fue completado con éxito en el gateway proveedor.
+     * Si es exitoso, actualiza el estado local del pago a COMPLETED.
+     *
+     * @param gatewayId Identificador del pago en el gateway (ej: PaymentIntent ID de Stripe)
+     * @return true si el pago está exitosamente acreditado
+     */
+    @Transactional
+    public boolean isPaymentSuccessful(String gatewayId) {
+        IPaymentGateway gateway = gatewayFactory.resolve()
+                .orElseThrow(() -> new RuntimeException("No hay gateway de pago configurado"));
+
+        boolean successful = gateway.isPaymentSuccessful(gatewayId);
+        if (successful) {
+            paymentRepository.findByGatewayId(gatewayId).ifPresent(payment -> {
+                if (!"COMPLETED".equalsIgnoreCase(payment.getStatus())) {
+                    payment.setStatus("COMPLETED");
+                    payment.setPaidAt(LocalDateTime.now());
+                    paymentRepository.save(payment);
+                    log.info("Pago {} marcado como COMPLETED tras verificación del gateway", gatewayId);
+                }
+            });
+        }
+        return successful;
     }
 
     /**

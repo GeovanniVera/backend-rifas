@@ -164,6 +164,12 @@ public class PayPalPaymentGateway implements IPaymentGateway {
     }
 
     @Override
+    public boolean isPaymentSuccessful(String paymentId) {
+        log.warn("PayPal: verificación directa no implementada para paymentId={}", paymentId);
+        return false;
+    }
+
+    @Override
     public String getGatewayName() {
         return GATEWAY;
     }

@@ -2,6 +2,10 @@ spring:
   application:
     name: backend
 
+  # Carga opcional de variables desde archivo .env local
+  config:
+    import: optional:file:.env[.properties]
+
   # Perfil activo por defecto (se sobreescribe con SPRING_PROFILES_ACTIVE)
   profiles:
     active: dev
@@ -65,7 +69,7 @@ storage:
 
 # Pagos
 payments:
-  gateway: ${PAYMENTS_GATEWAY:IN_MEMORY}
+  gateway: ${PAYMENTS_GATEWAY:STRIPE}
   stripe:
     secret-key: ${STRIPE_SECRET_KEY:}
   paypal:

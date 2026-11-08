@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,7 @@ public class RaffleService {
     private final ProductRepository productRepository;
     private final StorageService storageService;
     private final AuditService auditService;
+    private final RaffleTicketService ticketService;
     private final com.semillatecnologica.backend.modules.auth.repository.UserRepository userRepository;
     private final com.semillatecnologica.backend.modules.notification.service.NotificationService notificationService;
 
@@ -54,11 +56,26 @@ public class RaffleService {
 
     /**
      * Lista rifas activas (tienda pública).
+     * Si una rifa superó su drawDate, avanza automáticamente a DRAW y se excluye de la tienda activa.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public List<RaffleResponse> listActive() {
-        return raffleRepository.findByStatusOrderByCreatedAtDesc(Raffle.Status.ACTIVE)
-                .stream()
+        LocalDateTime now = LocalDateTime.now();
+        List<Raffle> activeRaffles = raffleRepository.findByStatusOrderByCreatedAtDesc(Raffle.Status.ACTIVE);
+        List<Raffle> stillActive = new ArrayList<>();
+
+        for (Raffle raffle : activeRaffles) {
+            if (raffle.getDrawDate() != null && raffle.getDrawDate().isBefore(now)) {
+                raffle.setStatus(Raffle.Status.DRAW);
+                raffleRepository.save(raffle);
+                log.info("Rifa {} superó su fecha de sorteo ({}) y avanza automáticamente a DRAW",
+                        raffle.getName(), raffle.getDrawDate());
+            } else {
+                stillActive.add(raffle);
+            }
+        }
+
+        return stillActive.stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -76,10 +93,19 @@ public class RaffleService {
 
     /**
      * Obtiene una rifa por ID.
+     * Si su drawDate expiró, actualiza su estado a DRAW.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public RaffleResponse get(String id) {
-        return toResponse(findById(id));
+        Raffle raffle = findById(id);
+        if (raffle.getStatus() == Raffle.Status.ACTIVE &&
+                raffle.getDrawDate() != null &&
+                raffle.getDrawDate().isBefore(LocalDateTime.now())) {
+            raffle.setStatus(Raffle.Status.DRAW);
+            raffle = raffleRepository.save(raffle);
+            log.info("Rifa {} consultada superó su fecha de sorteo y avanza a DRAW", raffle.getName());
+        }
+        return toResponse(raffle);
     }
 
     /**
@@ -131,6 +157,7 @@ public class RaffleService {
                 .build();
 
         raffleRepository.save(raffle);
+        ticketService.generateTicketsForRaffle(raffle);
 
         // Notificar a todos los clientes verificados sobre la nueva rifa
         try {
