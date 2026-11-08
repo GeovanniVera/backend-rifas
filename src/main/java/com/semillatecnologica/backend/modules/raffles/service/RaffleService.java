@@ -299,10 +299,11 @@ public class RaffleService {
     private RaffleResponse toResponse(Raffle raffle) {
         Product product = productRepository.findById(raffle.getProductId()).orElse(null);
         String productName = product != null ? product.getName() : null;
+        BigDecimal productPrice = product != null ? product.getPrice() : null;
         String imageUrl = product != null && product.getImageFileId() != null
                 ? storageService.getAccessUrl(product.getImageFileId(), 0).orElse(null)
                 : null;
-        return RaffleResponse.from(raffle, productName, imageUrl);
+        return RaffleResponse.from(raffle, productName, productPrice, imageUrl);
     }
 
     private Map<String, Object> raffleToMap(Raffle raffle) {

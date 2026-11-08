@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -36,7 +37,7 @@ public interface UserRepository extends JpaRepository<User, String> {
     /**
      * Obtiene todos los usuarios verificados.
      */
-    java.util.List<User> findByIsVerifiedTrue();
+    List<User> findByIsVerifiedTrue();
 
     /**
      * Carga un usuario con sus roles y permisos para autenticación.
@@ -61,4 +62,13 @@ public interface UserRepository extends JpaRepository<User, String> {
            "LEFT JOIN FETCH r.permissions " +
            "WHERE u.id = :id")
     Optional<User> findByIdWithRolesAndPermissions(@Param("id") String id);
+
+    /**
+     * Busca todos los usuarios que poseen un rol determinado.
+     *
+     * @param roleName Nombre del rol (ej: "admin")
+     * @return Lista de usuarios con ese rol
+     */
+    @Query("SELECT DISTINCT u FROM User u JOIN u.roles r WHERE r.name = :roleName")
+    List<User> findByRoleName(@Param("roleName") String roleName);
 }
