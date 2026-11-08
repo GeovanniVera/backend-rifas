@@ -173,7 +173,7 @@ public class NotificationService {
     public void sendRaffleSoldOutEmail(String to, String adminName, String raffleName,
                                       int totalTickets, String totalRevenue, String raffleId) {
         String subject = "¡Boletos agotados! — Rifa: " + raffleName;
-        String adminRafflesUrl = "http://localhost:5173/admin/rifas";
+        String adminRafflesUrl = "http://localhost:5173/admin/rifas?id=" + raffleId;
 
         Map<String, Object> variables = Map.of(
                 "adminName", adminName != null ? adminName : "Administrador",

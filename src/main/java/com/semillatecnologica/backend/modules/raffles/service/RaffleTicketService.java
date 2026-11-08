@@ -296,8 +296,8 @@ public class RaffleTicketService {
             List<User> admins = userRepository.findByRoleName("admin");
             String title = "¡Boletos agotados! — " + raffle.getName();
             String body = String.format(
-                    "Todos los boletos (%d boletos) de la rifa \"%s\" han sido vendidos. La rifa ha pasado automáticamente a estado de sorteo (DRAW).",
-                    raffle.getTicketCount(), raffle.getName()
+                    "¡Éxito total! Se han vendido todos los boletos (%d de %d) de la rifa \"%s\". La rifa ya está lista para que realices el sorteo y selecciones al ganador.",
+                    raffle.getTicketCount(), raffle.getTicketCount(), raffle.getName()
             );
 
             BigDecimal totalRevenue = raffle.getTicketPrice() != null
@@ -312,7 +312,7 @@ public class RaffleTicketService {
                         body,
                         "RAFFLE",
                         raffle.getId(),
-                        "/admin/rifas"
+                        "/admin/rifas?id=" + raffle.getId()
                 );
 
                 if (admin.getEmail() != null && !admin.getEmail().isBlank()) {

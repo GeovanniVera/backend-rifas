@@ -321,18 +321,18 @@ public class TemplateRenderer {
                     </div>
                     <div class="content">
                         <p>Hola <strong>%s</strong>,</p>
-                        <p>Te notificamos que una de las rifas en la plataforma ha vendido el <strong>100%% de sus boletos</strong> y ha avanzado automáticamente a la fase de sorteo:</p>
+                        <p>¡Éxito total! Se han vendido todos los boletos de una de las rifas en la plataforma y ya está lista para definir al ganador:</p>
                         <div class="box">
                             <h3>%s</h3>
                             <p class="stat">🎟️ <strong>Boletos vendidos:</strong> %d de %d boletos (100%%)</p>
                             <p class="stat">💰 <strong>Recaudación total:</strong> $%s MXN</p>
-                            <p class="stat">🔄 <strong>Nuevo estado:</strong> En sorteo (DRAW)</p>
+                            <p class="stat">🔄 <strong>Estado:</strong> Lista para realizar el sorteo</p>
                         </div>
                         <p style="font-size: 14px; color: #4b5563;">
                             Todos los boletos disponibles han sido adquiridos. Ya puedes ingresar al panel de administración para coordinar la realización del sorteo y premiar al ganador.
                         </p>
                         <div class="btn-wrap">
-                            <a href="%s" class="button">Gestionar Sorteo en el Panel</a>
+                            <a href="%s" class="button">Realizar Sorteo en el Panel</a>
                         </div>
                     </div>
                     <div class="footer">
