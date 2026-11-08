@@ -4,6 +4,7 @@ import com.semillatecnologica.backend.modules.admin.service.AuditService;
 import com.semillatecnologica.backend.modules.auth.model.User;
 import com.semillatecnologica.backend.modules.auth.repository.UserRepository;
 import com.semillatecnologica.backend.modules.notification.inapp.service.InAppNotificationService;
+import com.semillatecnologica.backend.modules.notification.service.NotificationService;
 import com.semillatecnologica.backend.modules.payments.service.PaymentService;
 import com.semillatecnologica.backend.modules.payments.strategy.PaymentIntent;
 import com.semillatecnologica.backend.modules.raffles.dto.CheckoutIntentResponse;
@@ -36,6 +37,7 @@ public class RaffleTicketService {
     private final PaymentService paymentService;
     private final AuditService auditService;
     private final InAppNotificationService inAppNotificationService;
+    private final NotificationService notificationService;
     private final UserRepository userRepository;
 
     private static final int RESERVATION_EXPIRATION_MINUTES = 10;
@@ -298,6 +300,10 @@ public class RaffleTicketService {
                     raffle.getTicketCount(), raffle.getName()
             );
 
+            BigDecimal totalRevenue = raffle.getTicketPrice() != null
+                    ? raffle.getTicketPrice().multiply(BigDecimal.valueOf(raffle.getTicketCount()))
+                    : BigDecimal.ZERO;
+
             for (User admin : admins) {
                 inAppNotificationService.create(
                         admin.getId(),
@@ -308,6 +314,17 @@ public class RaffleTicketService {
                         raffle.getId(),
                         "/admin/rifas"
                 );
+
+                if (admin.getEmail() != null && !admin.getEmail().isBlank()) {
+                    notificationService.sendRaffleSoldOutEmail(
+                            admin.getEmail(),
+                            admin.getName(),
+                            raffle.getName(),
+                            raffle.getTicketCount(),
+                            String.format("$%,.2f MXN", totalRevenue),
+                            raffle.getId()
+                    );
+                }
             }
             log.info("Notificación de boletos agotados enviada a {} administradores para la rifa {}",
                     admins.size(), raffle.getName());
