@@ -19,4 +19,6 @@ public interface RaffleTicketRepository extends JpaRepository<RaffleTicket, Stri
     boolean existsByRaffleId(String raffleId);
 
     long countByRaffleIdAndStatus(String raffleId, RaffleTicket.Status status);
+
+    List<RaffleTicket> findByStatus(RaffleTicket.Status status);
 }
