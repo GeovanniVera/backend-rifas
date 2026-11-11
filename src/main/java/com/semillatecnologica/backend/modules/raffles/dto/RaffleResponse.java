@@ -14,6 +14,7 @@ public record RaffleResponse(
     String id,
     String productId,
     String productName,
+    BigDecimal productPrice,
     String productImageUrl,
     String name,
     String description,
@@ -25,11 +26,12 @@ public record RaffleResponse(
     LocalDateTime drawDate,
     LocalDateTime createdAt
 ) {
-    public static RaffleResponse from(Raffle raffle, String productName, String productImageUrl) {
+    public static RaffleResponse from(Raffle raffle, String productName, BigDecimal productPrice, String productImageUrl) {
         return new RaffleResponse(
                 raffle.getId(),
                 raffle.getProductId(),
                 productName,
+                productPrice,
                 productImageUrl,
                 raffle.getName(),
                 raffle.getDescription(),
@@ -41,5 +43,9 @@ public record RaffleResponse(
                 raffle.getDrawDate(),
                 raffle.getCreatedAt()
         );
+    }
+
+    public static RaffleResponse from(Raffle raffle, String productName, String productImageUrl) {
+        return from(raffle, productName, null, productImageUrl);
     }
 }

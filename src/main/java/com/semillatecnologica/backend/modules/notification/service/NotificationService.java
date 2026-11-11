@@ -128,7 +128,6 @@ public class NotificationService {
         notify("EMAIL", to, subject, "password-reset-otp", variables);
     }
 
-
     /**
      * Envía email informando que la cuenta ya existe al intentar registrarse nuevamente.
      */
@@ -145,7 +144,6 @@ public class NotificationService {
 
         notify("EMAIL", to, subject, "account-already-registered", variables);
     }
-
 
     /**
      * Envía email notificando a un cliente sobre una nueva rifa disponible.
@@ -166,6 +164,26 @@ public class NotificationService {
         );
 
         notify("EMAIL", to, subject, "new-raffle-available", variables);
+    }
+
+    /**
+     * Envía email notificando a los administradores que se agotaron todos los boletos de una rifa.
+     */
+    @Async
+    public void sendRaffleSoldOutEmail(String to, String adminName, String raffleName,
+                                      int totalTickets, String totalRevenue, String raffleId) {
+        String subject = "¡Boletos agotados! — Rifa: " + raffleName;
+        String adminRafflesUrl = "http://localhost:5173/admin/rifas?id=" + raffleId;
+
+        Map<String, Object> variables = Map.of(
+                "adminName", adminName != null ? adminName : "Administrador",
+                "raffleName", raffleName,
+                "totalTickets", totalTickets,
+                "totalRevenue", totalRevenue,
+                "adminRafflesUrl", adminRafflesUrl
+        );
+
+        notify("EMAIL", to, subject, "raffle-sold-out", variables);
     }
 
     // =====================================================================

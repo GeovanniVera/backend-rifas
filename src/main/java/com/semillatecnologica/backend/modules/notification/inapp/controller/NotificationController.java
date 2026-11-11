@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -49,8 +50,9 @@ public class NotificationController {
             Authentication authentication) {
 
         String userId = authentication.getName();
+        Pageable cleanPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
         Page<InAppNotificationResponse> notifications =
-                inAppNotificationService.listByUser(userId, type, unreadOnly, pageable);
+                inAppNotificationService.listByUser(userId, type, unreadOnly, cleanPageable);
 
         return ResponseEntity.ok(ApiResponse.ok("Notificaciones obtenidas", notifications));
     }

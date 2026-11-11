@@ -29,6 +29,7 @@ public class TemplateRenderer {
             case "password-reset-otp" -> renderPasswordResetOtp(variables);
             case "account-already-registered" -> renderAccountAlreadyRegistered(variables);
             case "new-raffle-available" -> renderNewRaffleAvailable(variables);
+            case "raffle-sold-out" -> renderRaffleSoldOut(variables);
             default -> throw new IllegalArgumentException("Plantilla no encontrada: " + templateName);
         };
     }
@@ -285,5 +286,61 @@ public class TemplateRenderer {
             </body>
             </html>
             """.formatted(userName, raffleName, totalTickets, ticketPrice, drawDate, raffleUrl);
+    }
+
+    private String renderRaffleSoldOut(Map<String, Object> vars) {
+        String adminName = (String) vars.getOrDefault("adminName", "Administrador");
+        String raffleName = (String) vars.getOrDefault("raffleName", "Rifa");
+        int totalTickets = (int) vars.getOrDefault("totalTickets", 0);
+        String totalRevenue = (String) vars.getOrDefault("totalRevenue", "0.00");
+        String adminRafflesUrl = (String) vars.getOrDefault("adminRafflesUrl", "http://localhost:5173/admin/rifas");
+
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1a1525; background-color: #f8fafc; margin: 0; padding: 20px; }
+                    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; border: 1px solid #e4e2dc; }
+                    .header { background-color: #044311; color: #ffffff; padding: 28px 24px; text-align: center; }
+                    .header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+                    .content { padding: 30px 24px; }
+                    .box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 18px; margin: 20px 0; }
+                    .box h3 { margin: 0 0 12px 0; color: #044311; font-size: 17px; }
+                    .stat { margin: 6px 0; font-size: 14px; color: #374151; }
+                    .btn-wrap { text-align: center; margin: 30px 0 10px; }
+                    .button { display: inline-block; padding: 12px 28px; background-color: #044311; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; }
+                    .footer { text-align: center; padding: 20px; color: #5a5565; font-size: 12px; background: #fafafa; border-top: 1px solid #e4e2dc; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>¡Boletos Agotados en NUVORA!</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hola <strong>%s</strong>,</p>
+                        <p>¡Éxito total! Se han vendido todos los boletos de una de las rifas en la plataforma y ya está lista para definir al ganador:</p>
+                        <div class="box">
+                            <h3>%s</h3>
+                            <p class="stat">🎟️ <strong>Boletos vendidos:</strong> %d de %d boletos (100%%)</p>
+                            <p class="stat">💰 <strong>Recaudación total:</strong> $%s MXN</p>
+                            <p class="stat">🔄 <strong>Estado:</strong> Lista para realizar el sorteo</p>
+                        </div>
+                        <p style="font-size: 14px; color: #4b5563;">
+                            Todos los boletos disponibles han sido adquiridos. Ya puedes ingresar al panel de administración para coordinar la realización del sorteo y premiar al ganador.
+                        </p>
+                        <div class="btn-wrap">
+                            <a href="%s" class="button">Realizar Sorteo en el Panel</a>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 NUVORA Tienda de Rifas. Notificación automática del sistema.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(adminName, raffleName, totalTickets, totalTickets, totalRevenue, adminRafflesUrl);
     }
 }

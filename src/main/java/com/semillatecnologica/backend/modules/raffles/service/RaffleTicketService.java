@@ -1,6 +1,10 @@
 package com.semillatecnologica.backend.modules.raffles.service;
 
 import com.semillatecnologica.backend.modules.admin.service.AuditService;
+import com.semillatecnologica.backend.modules.auth.model.User;
+import com.semillatecnologica.backend.modules.auth.repository.UserRepository;
+import com.semillatecnologica.backend.modules.notification.inapp.service.InAppNotificationService;
+import com.semillatecnologica.backend.modules.notification.service.NotificationService;
 import com.semillatecnologica.backend.modules.payments.service.PaymentService;
 import com.semillatecnologica.backend.modules.payments.strategy.PaymentIntent;
 import com.semillatecnologica.backend.modules.raffles.dto.CheckoutIntentResponse;
@@ -32,6 +36,9 @@ public class RaffleTicketService {
     private final RaffleTicketRepository ticketRepository;
     private final PaymentService paymentService;
     private final AuditService auditService;
+    private final InAppNotificationService inAppNotificationService;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     private static final int RESERVATION_EXPIRATION_MINUTES = 10;
 
@@ -253,10 +260,15 @@ public class RaffleTicketService {
         long totalSold = ticketRepository.countByRaffleIdAndStatus(raffle.getId(), RaffleTicket.Status.SOLD);
         raffle.setTicketsSold((int) totalSold);
 
-        // Si se vendieron todos los boletos, pasa a DRAW
+        // Si se vendieron todos los boletos, pasa a DRAW y notifica a los administradores
         if (raffle.getTicketsSold() >= raffle.getTicketCount()) {
+            boolean wasNotDraw = raffle.getStatus() != Raffle.Status.DRAW;
             raffle.setStatus(Raffle.Status.DRAW);
             log.info("Rifa {} vendió todos sus boletos y avanza a DRAW", raffle.getName());
+
+            if (wasNotDraw) {
+                notifyAdminsTicketsSoldOut(raffle);
+            }
         }
         raffleRepository.save(raffle);
 
@@ -274,5 +286,51 @@ public class RaffleTicketService {
         return tickets.stream()
                 .map(t -> RaffleTicketResponse.from(t, userId))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Notifica a todos los administradores del sistema cuando una rifa vende el 100% de sus boletos.
+     */
+    private void notifyAdminsTicketsSoldOut(Raffle raffle) {
+        try {
+            List<User> admins = userRepository.findByRoleName("admin");
+            String title = "¡Boletos agotados! — " + raffle.getName();
+            String body = String.format(
+                    "¡Éxito total! Se han vendido todos los boletos (%d de %d) de la rifa \"%s\". La rifa ya está lista para que realices el sorteo y selecciones al ganador.",
+                    raffle.getTicketCount(), raffle.getTicketCount(), raffle.getName()
+            );
+
+            BigDecimal totalRevenue = raffle.getTicketPrice() != null
+                    ? raffle.getTicketPrice().multiply(BigDecimal.valueOf(raffle.getTicketCount()))
+                    : BigDecimal.ZERO;
+
+            for (User admin : admins) {
+                inAppNotificationService.create(
+                        admin.getId(),
+                        "SYSTEM",
+                        title,
+                        body,
+                        "RAFFLE",
+                        raffle.getId(),
+                        "/admin/rifas?id=" + raffle.getId()
+                );
+
+                if (admin.getEmail() != null && !admin.getEmail().isBlank()) {
+                    notificationService.sendRaffleSoldOutEmail(
+                            admin.getEmail(),
+                            admin.getName(),
+                            raffle.getName(),
+                            raffle.getTicketCount(),
+                            String.format("$%,.2f MXN", totalRevenue),
+                            raffle.getId()
+                    );
+                }
+            }
+            log.info("Notificación de boletos agotados enviada a {} administradores para la rifa {}",
+                    admins.size(), raffle.getName());
+        } catch (Exception e) {
+            log.error("Error al notificar a los administradores sobre rifa agotada {}: {}",
+                    raffle.getId(), e.getMessage());
+        }
     }
 }

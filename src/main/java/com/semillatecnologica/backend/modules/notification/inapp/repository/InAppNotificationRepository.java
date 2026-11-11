@@ -28,12 +28,12 @@ public interface InAppNotificationRepository extends JpaRepository<InAppNotifica
      */
     @Query(value = "SELECT n.* FROM in_app_notifications n WHERE " +
            "n.user_id = :userId AND " +
-           "COALESCE(:type, n.type) = n.type AND " +
+           "(CAST(:type AS VARCHAR) IS NULL OR :type = '' OR n.type = :type) AND " +
            "(:unreadOnly = false OR n.read_at IS NULL) " +
            "ORDER BY n.created_at DESC",
            countQuery = "SELECT COUNT(*) FROM in_app_notifications n WHERE " +
            "n.user_id = :userId AND " +
-           "COALESCE(:type, n.type) = n.type AND " +
+           "(CAST(:type AS VARCHAR) IS NULL OR :type = '' OR n.type = :type) AND " +
            "(:unreadOnly = false OR n.read_at IS NULL)",
            nativeQuery = true)
     Page<InAppNotification> findByUserId(
