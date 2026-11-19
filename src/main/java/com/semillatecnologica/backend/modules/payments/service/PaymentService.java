@@ -166,12 +166,17 @@ public class PaymentService {
      */
     @Transactional
     public boolean isPaymentSuccessful(String gatewayId) {
+        java.util.Optional<Payment> localPayment = paymentRepository.findByGatewayId(gatewayId);
+        if (localPayment.isPresent() && "COMPLETED".equalsIgnoreCase(localPayment.get().getStatus())) {
+            return true;
+        }
+
         IPaymentGateway gateway = gatewayFactory.resolve()
                 .orElseThrow(() -> new RuntimeException("No hay gateway de pago configurado"));
 
         boolean successful = gateway.isPaymentSuccessful(gatewayId);
         if (successful) {
-            paymentRepository.findByGatewayId(gatewayId).ifPresent(payment -> {
+            localPayment.ifPresent(payment -> {
                 if (!"COMPLETED".equalsIgnoreCase(payment.getStatus())) {
                     payment.setStatus("COMPLETED");
                     payment.setPaidAt(LocalDateTime.now());
@@ -181,6 +186,22 @@ public class PaymentService {
             });
         }
         return successful;
+    }
+
+    /**
+     * Simula la acreditación de un pago en modo de pruebas / desarrollo.
+     * Marca el pago local como COMPLETED.
+     *
+     * @param gatewayId Identificador del pago en el gateway
+     */
+    @Transactional
+    public void simulatePaymentSuccess(String gatewayId) {
+        paymentRepository.findByGatewayId(gatewayId).ifPresent(payment -> {
+            payment.setStatus("COMPLETED");
+            payment.setPaidAt(LocalDateTime.now());
+            paymentRepository.save(payment);
+            log.info("Pago {} simulado exitosamente como COMPLETED", gatewayId);
+        });
     }
 
     /**

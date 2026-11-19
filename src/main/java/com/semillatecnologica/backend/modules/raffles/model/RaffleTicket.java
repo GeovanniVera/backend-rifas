@@ -52,8 +52,15 @@ public class RaffleTicket {
     @Column(name = "payment_intent_id")
     private String paymentIntentId;
 
+    @Column(name = "payment_method", length = 30)
+    @Builder.Default
+    private String paymentMethod = "CARD";
+
     @Column(name = "reserved_at")
     private LocalDateTime reservedAt;
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
 
     @Column(name = "purchased_at")
     private LocalDateTime purchasedAt;

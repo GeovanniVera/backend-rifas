@@ -1,9 +1,6 @@
 package com.semillatecnologica.backend.modules.raffles.controller;
 
-import com.semillatecnologica.backend.modules.raffles.dto.CheckoutIntentResponse;
-import com.semillatecnologica.backend.modules.raffles.dto.ConfirmCheckoutRequest;
-import com.semillatecnologica.backend.modules.raffles.dto.CreateCheckoutIntentRequest;
-import com.semillatecnologica.backend.modules.raffles.dto.RaffleTicketResponse;
+import com.semillatecnologica.backend.modules.raffles.dto.*;
 import com.semillatecnologica.backend.modules.raffles.service.RaffleTicketService;
 import com.semillatecnologica.backend.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -71,5 +68,48 @@ public class RaffleCheckoutController {
         List<RaffleTicketResponse> confirmedTickets = ticketService.confirmPurchase(
                 request.paymentIntentId(), authentication.getName(), httpRequest);
         return ResponseEntity.ok(ApiResponse.ok("Compra confirmada exitosamente", confirmedTickets));
+    }
+
+    /**
+     * Registra que el usuario seleccionó pagar vía OXXO y extiende la reserva de boletos a 3 horas.
+     */
+    @PostMapping("/checkout/registrar-oxxo")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Registrar reserva OXXO (3 horas)",
+               description = "Requiere autenticación. Extiende la reserva a 3 horas tras generar el voucher de OXXO.")
+    public ResponseEntity<ApiResponse<OxxoReservationResponse>> registerOxxo(
+            @Valid @RequestBody RegisterOxxoRequest request,
+            Authentication authentication) {
+        OxxoReservationResponse response = ticketService.registerOxxoVoucher(
+                request.paymentIntentId(), authentication.getName());
+        return ResponseEntity.ok(ApiResponse.ok("Reserva OXXO registrada (3 horas)", response));
+    }
+
+    /**
+     * Simula la acreditación del pago en OXXO (Herramienta para modo de prueba / evaluación docente).
+     */
+    @PostMapping("/checkout/simular-oxxo")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Simular pago en OXXO (Modo prueba)",
+               description = "Requiere autenticación. Simula la acreditación en efectivo de OXXO y confirma la compra.")
+    public ResponseEntity<ApiResponse<List<RaffleTicketResponse>>> simulateOxxo(
+            @Valid @RequestBody SimulateOxxoRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        List<RaffleTicketResponse> confirmedTickets = ticketService.simulateOxxoPayment(
+                request.paymentIntentId(), authentication.getName(), httpRequest);
+        return ResponseEntity.ok(ApiResponse.ok("Pago en OXXO simulado y acreditado con éxito", confirmedTickets));
+    }
+
+    /**
+     * Consulta las reservas OXXO / en efectivo pendientes de pago (Vista de Administrador).
+     */
+    @GetMapping("/admin/checkout/reservas-oxxo")
+    @PreAuthorize("hasAuthority('raffles.read') or hasAuthority('raffles.write')")
+    @Operation(summary = "Consultar reservas OXXO pendientes",
+               description = "Requiere permiso de rifas. Devuelve todas las reservas OXXO en espera de pago.")
+    public ResponseEntity<ApiResponse<List<PendingOxxoReservationDto>>> getPendingOxxoReservations() {
+        List<PendingOxxoReservationDto> reservations = ticketService.getPendingOxxoReservations();
+        return ResponseEntity.ok(ApiResponse.ok("Reservas OXXO pendientes", reservations));
     }
 }
