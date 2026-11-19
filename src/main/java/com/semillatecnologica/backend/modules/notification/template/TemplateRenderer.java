@@ -30,6 +30,7 @@ public class TemplateRenderer {
             case "account-already-registered" -> renderAccountAlreadyRegistered(variables);
             case "new-raffle-available" -> renderNewRaffleAvailable(variables);
             case "raffle-sold-out" -> renderRaffleSoldOut(variables);
+            case "login-alert" -> renderLoginAlert(variables);
             default -> throw new IllegalArgumentException("Plantilla no encontrada: " + templateName);
         };
     }
@@ -242,6 +243,7 @@ public class TemplateRenderer {
         String raffleName = (String) vars.getOrDefault("raffleName", "Nueva Rifa");
         String ticketPrice = (String) vars.getOrDefault("ticketPrice", "0");
         int totalTickets = (int) vars.getOrDefault("totalTickets", 0);
+        String startDate = (String) vars.getOrDefault("startDate", "Inmediato");
         String drawDate = (String) vars.getOrDefault("drawDate", "Por definir");
         String raffleUrl = (String) vars.getOrDefault("raffleUrl", "http://localhost:5173");
 
@@ -272,12 +274,13 @@ public class TemplateRenderer {
                             <h3 style="margin-top:0; color: #111;">%s</h3>
                             <p style="margin: 5px 0;">🎟️ <strong>Total de boletos:</strong> %d boletos</p>
                             <p style="margin: 5px 0;">💲 <strong>Costo por boleto:</strong> $%s MXN</p>
-                            <p style="margin: 5px 0;">📅 <strong>Fecha del sorteo:</strong> %s</p>
+                            <p style="margin: 5px 0;">🗓️ <strong>Inicio de la rifa:</strong> %s</p>
+                            <p style="margin: 5px 0;">📅 <strong>Fin / Fecha del sorteo:</strong> %s</p>
                         </div>
                         <p style="text-align: center; margin: 30px 0;">
                             <a href="%s" class="button">Ver Rifa en la Tienda</a>
                         </p>
-                        <p style="font-size: 13px; color: #6b7280;">La venta de boletos comenzará muy pronto. ¡Entra a conocer el producto y prepárate para participar!</p>
+                        <p style="font-size: 13px; color: #6b7280;">¡Entra a conocer el producto y participa dentro del periodo de la rifa!</p>
                     </div>
                     <div class="footer">
                         <p>© 2026 TiendaRifas. Todos los derechos reservados.</p>
@@ -285,7 +288,7 @@ public class TemplateRenderer {
                 </div>
             </body>
             </html>
-            """.formatted(userName, raffleName, totalTickets, ticketPrice, drawDate, raffleUrl);
+            """.formatted(userName, raffleName, totalTickets, ticketPrice, startDate, drawDate, raffleUrl);
     }
 
     private String renderRaffleSoldOut(Map<String, Object> vars) {
@@ -342,5 +345,65 @@ public class TemplateRenderer {
             </body>
             </html>
             """.formatted(adminName, raffleName, totalTickets, totalTickets, totalRevenue, adminRafflesUrl);
+    }
+
+    private String renderLoginAlert(Map<String, Object> vars) {
+        String userName = escapeHtml(String.valueOf(vars.getOrDefault("userName", "Usuario")));
+        String roleLabel = escapeHtml(String.valueOf(vars.getOrDefault("roleLabel", "Usuario")));
+        String loginDate = escapeHtml(String.valueOf(vars.getOrDefault("loginDate", "")));
+        String ipAddress = escapeHtml(String.valueOf(vars.getOrDefault("ipAddress", "Desconocida")));
+        String userAgent = escapeHtml(String.valueOf(vars.getOrDefault("userAgent", "Navegador web")));
+
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1a1525; background-color: #f8fafc; margin: 0; padding: 20px; }
+                    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; border: 1px solid #e4e2dc; }
+                    .header { background-color: #0b4f32; color: #ffffff; padding: 24px; text-align: center; }
+                    .header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+                    .content { padding: 26px 24px; }
+                    .box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 18px 0; }
+                    .row { margin: 6px 0; font-size: 14px; color: #334155; }
+                    .footer { text-align: center; padding: 18px; color: #64748b; font-size: 12px; background: #fafafa; border-top: 1px solid #e4e2dc; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Nuevo inicio de sesión detectado</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hola <strong>%s</strong>,</p>
+                        <p>Te informamos que se ha iniciado sesión en tu cuenta de <strong>NUVORA Tienda de Rifas</strong>.</p>
+                        <div class="box">
+                            <p class="row">👤 <strong>Perfil:</strong> %s</p>
+                            <p class="row">📅 <strong>Fecha y hora:</strong> %s</p>
+                            <p class="row">🌐 <strong>Dirección IP:</strong> %s</p>
+                            <p class="row">💻 <strong>Dispositivo:</strong> %s</p>
+                        </div>
+                        <p style="font-size: 13px; color: #475569;">
+                            Si fuiste tú, puedes ignorar este aviso. Si no reconoces este acceso, te recomendamos cambiar tu contraseña de inmediato.
+                        </p>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 NUVORA Tienda de Rifas. Aviso automático de seguridad.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(userName, roleLabel, loginDate, ipAddress, userAgent);
+    }
+
+    private String escapeHtml(String input) {
+        if (input == null) return "";
+        return input
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 }

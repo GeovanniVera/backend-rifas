@@ -118,7 +118,7 @@ public class RaffleService {
      * </p>
      */
     @Transactional
-    public RaffleResponse create(String productId, LocalDateTime drawDate, String userId, HttpServletRequest request) {
+    public RaffleResponse create(String productId, LocalDateTime startDate, LocalDateTime drawDate, String userId, HttpServletRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Producto"));
 
@@ -129,6 +129,19 @@ public class RaffleService {
         // Regla: Solo una rifa activa o en sorteo por producto
         if (raffleRepository.existsByProductIdAndStatusIn(productId, List.of(Raffle.Status.ACTIVE, Raffle.Status.DRAW))) {
             throw new ValidationException("El producto ya tiene una rifa activa o en sorteo");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (startDate != null && startDate.toLocalDate().isBefore(now.toLocalDate())) {
+            throw new ValidationException("La fecha de inicio no puede ser de un día anterior a hoy");
+        }
+
+        if (drawDate != null && drawDate.isBefore(now)) {
+            throw new ValidationException("La fecha de fin/sorteo no puede ser anterior al momento actual");
+        }
+
+        if (startDate != null && drawDate != null && !drawDate.isAfter(startDate)) {
+            throw new ValidationException("La fecha de fin/sorteo debe ser posterior a la fecha de inicio");
         }
 
         // Cálculo dinámico de total de boletos: ceil(2.0 / ticketRate)
@@ -152,6 +165,7 @@ public class RaffleService {
                 .marginPercent(new BigDecimal("100.00"))
                 .ticketCount(totalTickets)
                 .ticketPrice(ticketPrice)
+                .startDate(startDate)
                 .drawDate(drawDate)
                 .status(Raffle.Status.ACTIVE)
                 .build();
@@ -162,8 +176,12 @@ public class RaffleService {
         // Notificar a todos los clientes verificados sobre la nueva rifa
         try {
             var customers = userRepository.findByIsVerifiedTrue();
+            var dateFormatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            String startDateFormatted = startDate != null
+                    ? startDate.format(dateFormatter)
+                    : "Inmediato";
             String drawDateFormatted = drawDate != null
-                    ? drawDate.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                    ? drawDate.format(dateFormatter)
                     : "Fecha por definir";
 
             for (var customer : customers) {
@@ -173,6 +191,7 @@ public class RaffleService {
                         raffle.getName(),
                         ticketPrice.toString(),
                         totalTickets,
+                        startDateFormatted,
                         drawDateFormatted,
                         raffle.getId()
                 );

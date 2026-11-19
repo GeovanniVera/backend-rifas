@@ -70,10 +70,11 @@ public class RaffleController {
     @Operation(summary = "Crear rifa", description = "Requiere `raffles.write`. Aparta el producto del stock y calcula la rifa automáticamente.")
     public ResponseEntity<ApiResponse<RaffleResponse>> create(
             @RequestParam String productId,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime startDate,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime drawDate,
             Authentication authentication,
             HttpServletRequest request) {
-        RaffleResponse raffle = raffleService.create(productId, drawDate, authentication.getName(), request);
+        RaffleResponse raffle = raffleService.create(productId, startDate, drawDate, authentication.getName(), request);
         return ResponseEntity.ok(ApiResponse.ok("Rifa creada exitosamente", raffle));
     }
 

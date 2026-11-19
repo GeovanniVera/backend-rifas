@@ -54,6 +54,9 @@ public class Raffle {
     @Column(name = "ticket_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal ticketPrice;
 
+    @Column(name = "start_date")
+    private LocalDateTime startDate;
+
     @Column(name = "draw_date")
     private LocalDateTime drawDate;
 

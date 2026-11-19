@@ -205,6 +205,53 @@ public class PaymentService {
     }
 
     /**
+     * Marca un pago pendiente como CANCELLED cuando el usuario cancela el checkout antes de pagar.
+     *
+     * @param gatewayId Identificador del pago en el gateway
+     */
+    @Transactional
+    public void cancelPayment(String gatewayId) {
+        paymentRepository.findByGatewayId(gatewayId).ifPresent(payment -> {
+            if (!"COMPLETED".equalsIgnoreCase(payment.getStatus())) {
+                payment.setStatus("CANCELLED");
+                paymentRepository.save(payment);
+                log.info("Pago {} marcado como CANCELLED por el usuario", gatewayId);
+            }
+        });
+    }
+
+    /**
+     * Adjunta metadatos de transferencia bancaria (referencia asignada y clave de rastreo opcional) al pago local.
+     */
+    @Transactional
+    public void attachTransferMetadata(String gatewayId, String referenceCode, String trackingReference) {
+        paymentRepository.findByGatewayId(gatewayId).ifPresent(payment -> {
+            Map<String, String> updated = payment.getMetadataJson() != null
+                    ? new java.util.HashMap<>(payment.getMetadataJson())
+                    : new java.util.HashMap<>();
+            updated.put("paymentMethod", "TRANSFER");
+            if (referenceCode != null && !referenceCode.isBlank()) {
+                updated.put("transferReference", referenceCode.trim());
+            }
+            if (trackingReference != null && !trackingReference.isBlank()) {
+                updated.put("trackingReference", trackingReference.trim());
+            }
+            payment.setMetadataJson(updated);
+            paymentRepository.save(payment);
+        });
+    }
+
+    /**
+     * Obtiene los metadatos de un pago por su gatewayId si existe.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> getPaymentMetadata(String gatewayId) {
+        return paymentRepository.findByGatewayId(gatewayId)
+                .map(Payment::getMetadataJson)
+                .orElse(Map.of());
+    }
+
+    /**
      * Retorna un pago por ID.
      */
     @Transactional(readOnly = true)

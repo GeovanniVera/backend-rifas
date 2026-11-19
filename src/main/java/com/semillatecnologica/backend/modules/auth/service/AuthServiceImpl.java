@@ -139,6 +139,22 @@ public class AuthServiceImpl implements AuthService {
         auditService.log("LOGIN_SUCCEEDED", "USER", user.getId(), user.getId(),
                 null, Map.of("email", user.getEmail()), httpRequest);
 
+        try {
+            boolean isAdmin = user.getRoles().stream()
+                    .anyMatch(r -> "admin".equalsIgnoreCase(r.getName()) || "role-admin".equalsIgnoreCase(r.getId()));
+            String roleLabel = isAdmin ? "Administrador" : "Cliente";
+            notificationService.sendLoginAlertEmail(
+                    user.getEmail(),
+                    user.getName(),
+                    roleLabel,
+                    ip,
+                    httpRequest.getHeader("User-Agent"),
+                    LocalDateTime.now()
+            );
+        } catch (Exception e) {
+            log.error("No se pudo encolar correo de aviso de login para {}: {}", user.getEmail(), e.getMessage());
+        }
+
         return response;
     }
 

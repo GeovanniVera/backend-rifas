@@ -4,6 +4,7 @@ import com.semillatecnologica.backend.modules.raffles.model.RaffleTicket;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -21,4 +22,10 @@ public interface RaffleTicketRepository extends JpaRepository<RaffleTicket, Stri
     long countByRaffleIdAndStatus(String raffleId, RaffleTicket.Status status);
 
     List<RaffleTicket> findByStatus(RaffleTicket.Status status);
+
+    List<RaffleTicket> findByStatusAndPurchasedAtBetweenOrderByPurchasedAtDesc(
+            RaffleTicket.Status status,
+            LocalDateTime start,
+            LocalDateTime end
+    );
 }

@@ -23,6 +23,7 @@ public record RaffleResponse(
     int ticketsSold,
     BigDecimal ticketPrice,
     Raffle.Status status,
+    LocalDateTime startDate,
     LocalDateTime drawDate,
     LocalDateTime createdAt
 ) {
@@ -40,6 +41,7 @@ public record RaffleResponse(
                 raffle.getTicketsSold(),
                 raffle.getTicketPrice(),
                 raffle.getStatus(),
+                raffle.getStartDate(),
                 raffle.getDrawDate(),
                 raffle.getCreatedAt()
         );

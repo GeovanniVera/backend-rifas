@@ -71,6 +71,22 @@ public class RaffleCheckoutController {
     }
 
     /**
+     * Cancela el intento de compra y libera los boletos apartados inmediatamente.
+     */
+    @PostMapping("/checkout/cancelar")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Cancelar reserva de checkout",
+               description = "Requiere autenticación. Libera los boletos apartados al cancelar el pago.")
+    public ResponseEntity<ApiResponse<List<RaffleTicketResponse>>> cancelCheckout(
+            @Valid @RequestBody CancelCheckoutRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        List<RaffleTicketResponse> releasedTickets = ticketService.cancelCheckout(
+                request.paymentIntentId(), authentication.getName(), httpRequest);
+        return ResponseEntity.ok(ApiResponse.ok("Reserva cancelada y boletos liberados", releasedTickets));
+    }
+
+    /**
      * Registra que el usuario seleccionó pagar vía OXXO y extiende la reserva de boletos a 3 horas.
      */
     @PostMapping("/checkout/registrar-oxxo")
@@ -111,5 +127,64 @@ public class RaffleCheckoutController {
     public ResponseEntity<ApiResponse<List<PendingOxxoReservationDto>>> getPendingOxxoReservations() {
         List<PendingOxxoReservationDto> reservations = ticketService.getPendingOxxoReservations();
         return ResponseEntity.ok(ApiResponse.ok("Reservas OXXO pendientes", reservations));
+    }
+
+    /**
+     * Registra que el usuario seleccionó pagar vía Transferencia bancaria (SPEI) y extiende la reserva a 3 horas.
+     */
+    @PostMapping("/checkout/registrar-transferencia")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Registrar reserva por transferencia SPEI (3 horas)",
+               description = "Requiere autenticación. Genera referencia de transferencia y aparta boletos por 3 horas.")
+    public ResponseEntity<ApiResponse<TransferReservationResponse>> registerTransfer(
+            @Valid @RequestBody RegisterTransferRequest request,
+            Authentication authentication) {
+        TransferReservationResponse response = ticketService.registerTransferReservation(
+                request.paymentIntentId(), request.trackingReference(), authentication.getName());
+        return ResponseEntity.ok(ApiResponse.ok("Ficha de transferencia generada (3 horas)", response));
+    }
+
+    /**
+     * Consulta las transferencias bancarias SPEI pendientes de validación (Vista Administrador).
+     */
+    @GetMapping("/admin/checkout/reservas-transferencia")
+    @PreAuthorize("hasAuthority('raffles.read') or hasAuthority('raffles.write')")
+    @Operation(summary = "Consultar transferencias pendientes",
+               description = "Requiere permiso de rifas. Devuelve transferencias bancarias en espera de acreditación.")
+    public ResponseEntity<ApiResponse<List<PendingTransferReservationDto>>> getPendingTransferReservations() {
+        List<PendingTransferReservationDto> reservations = ticketService.getPendingTransferReservations();
+        return ResponseEntity.ok(ApiResponse.ok("Transferencias pendientes", reservations));
+    }
+
+    /**
+     * Acredita manualmente una transferencia bancaria SPEI y confirma los boletos a SOLD.
+     */
+    @PostMapping("/admin/checkout/acreditar-transferencia")
+    @PreAuthorize("hasAuthority('raffles.write')")
+    @Operation(summary = "Acreditar transferencia bancaria",
+               description = "Requiere permiso `raffles.write`. Acredita la transferencia y marca los boletos como vendidos.")
+    public ResponseEntity<ApiResponse<List<RaffleTicketResponse>>> confirmTransfer(
+            @Valid @RequestBody ConfirmTransferRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        List<RaffleTicketResponse> confirmedTickets = ticketService.confirmTransferPayment(
+                request.paymentIntentId(), authentication.getName(), httpRequest);
+        return ResponseEntity.ok(ApiResponse.ok("Transferencia acreditada y boletos confirmados", confirmedTickets));
+    }
+
+    /**
+     * Rechaza o libera manualmente una reserva por transferencia bancaria SPEI.
+     */
+    @PostMapping("/admin/checkout/rechazar-transferencia")
+    @PreAuthorize("hasAuthority('raffles.write')")
+    @Operation(summary = "Rechazar o liberar transferencia pendiente",
+               description = "Requiere permiso `raffles.write`. Cancela la reserva y devuelve los boletos a AVAILABLE.")
+    public ResponseEntity<ApiResponse<List<RaffleTicketResponse>>> rejectTransfer(
+            @Valid @RequestBody ConfirmTransferRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        List<RaffleTicketResponse> releasedTickets = ticketService.cancelCheckout(
+                request.paymentIntentId(), authentication.getName(), httpRequest);
+        return ResponseEntity.ok(ApiResponse.ok("Reserva por transferencia liberada", releasedTickets));
     }
 }

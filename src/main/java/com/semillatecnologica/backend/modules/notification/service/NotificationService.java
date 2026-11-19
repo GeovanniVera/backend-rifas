@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
@@ -150,7 +152,8 @@ public class NotificationService {
      */
     @Async
     public void sendNewRaffleNotificationEmail(String to, String userName, String raffleName,
-                                              String ticketPrice, int totalTickets, String drawDate, String raffleId) {
+                                              String ticketPrice, int totalTickets, String startDate,
+                                              String drawDate, String raffleId) {
         String subject = "¡Nueva rifa disponible: " + raffleName + "!";
         String raffleUrl = "http://localhost:5173/rifa/" + raffleId;
 
@@ -159,11 +162,37 @@ public class NotificationService {
                 "raffleName", raffleName,
                 "ticketPrice", ticketPrice,
                 "totalTickets", totalTickets,
+                "startDate", startDate != null ? startDate : "Inmediato",
                 "drawDate", drawDate != null ? drawDate : "Por definir",
                 "raffleUrl", raffleUrl
         );
 
         notify("EMAIL", to, subject, "new-raffle-available", variables);
+    }
+
+    /**
+     * Envía email notificando un nuevo inicio de sesión (administrador o cliente).
+     */
+    @Async
+    public void sendLoginAlertEmail(String to, String userName, String roleLabel,
+                                    String ipAddress, String userAgent, LocalDateTime loginTime) {
+        try {
+            String subject = "Nuevo inicio de sesión - NUVORA TiendaRifas";
+            String formattedTime = (loginTime != null ? loginTime : LocalDateTime.now())
+                    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
+
+            Map<String, Object> variables = Map.of(
+                    "userName", userName != null ? userName : "Usuario",
+                    "roleLabel", roleLabel != null ? roleLabel : "Cliente",
+                    "loginDate", formattedTime,
+                    "ipAddress", ipAddress != null && !ipAddress.isBlank() ? ipAddress : "Desconocida",
+                    "userAgent", userAgent != null && !userAgent.isBlank() ? userAgent : "Navegador web"
+            );
+
+            notify("EMAIL", to, subject, "login-alert", variables);
+        } catch (Exception e) {
+            log.error("Error al enviar correo de inicio de sesión a {}: {}", to, e.getMessage());
+        }
     }
 
     /**

@@ -11,7 +11,9 @@ import com.semillatecnologica.backend.modules.raffles.dto.CheckoutIntentResponse
 import com.semillatecnologica.backend.modules.raffles.dto.CreateCheckoutIntentRequest;
 import com.semillatecnologica.backend.modules.raffles.dto.OxxoReservationResponse;
 import com.semillatecnologica.backend.modules.raffles.dto.PendingOxxoReservationDto;
+import com.semillatecnologica.backend.modules.raffles.dto.PendingTransferReservationDto;
 import com.semillatecnologica.backend.modules.raffles.dto.RaffleTicketResponse;
+import com.semillatecnologica.backend.modules.raffles.dto.TransferReservationResponse;
 import com.semillatecnologica.backend.modules.raffles.model.Raffle;
 import com.semillatecnologica.backend.modules.raffles.model.RaffleTicket;
 import com.semillatecnologica.backend.modules.raffles.repository.RaffleRepository;
@@ -21,6 +23,7 @@ import com.semillatecnologica.backend.shared.exception.ValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +47,19 @@ public class RaffleTicketService {
 
     private static final int CARD_RESERVATION_EXPIRATION_MINUTES = 10;
     private static final int OXXO_RESERVATION_EXPIRATION_HOURS = 3;
+    private static final int TRANSFER_RESERVATION_EXPIRATION_HOURS = 3;
+
+    @Value("${app.payments.transfer.bank-name:BBVA México (Demo)}")
+    private String transferBankName = "BBVA México (Demo)";
+
+    @Value("${app.payments.transfer.beneficiary:NUVORA Tienda de Rifas}")
+    private String transferBeneficiary = "NUVORA Tienda de Rifas";
+
+    @Value("${app.payments.transfer.clabe:012180001234567890}")
+    private String transferClabe = "012180001234567890";
+
+    @Value("${app.payments.transfer.account-number:0123456789}")
+    private String transferAccountNumber = "0123456789";
 
     /**
      * Verifica si una reserva de boleto ha expirado.
@@ -134,13 +150,20 @@ public class RaffleTicketService {
         Raffle raffle = raffleRepository.findById(request.raffleId())
                 .orElseThrow(() -> new NotFoundException("Rifa"));
 
+        LocalDateTime nowCheck = LocalDateTime.now();
         if (raffle.getStatus() != Raffle.Status.ACTIVE ||
-                (raffle.getDrawDate() != null && raffle.getDrawDate().isBefore(LocalDateTime.now()))) {
+                (raffle.getDrawDate() != null && raffle.getDrawDate().isBefore(nowCheck))) {
             if (raffle.getStatus() == Raffle.Status.ACTIVE) {
                 raffle.setStatus(Raffle.Status.DRAW);
                 raffleRepository.save(raffle);
             }
             throw new ValidationException("La fecha límite para participar en esta rifa ya expiró");
+        }
+
+        if (raffle.getStartDate() != null && nowCheck.isBefore(raffle.getStartDate())) {
+            String startFormatted = raffle.getStartDate()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+            throw new ValidationException("La venta de boletos para esta rifa iniciará el " + startFormatted);
         }
 
         List<Integer> numbers = request.ticketNumbers();
@@ -317,6 +340,64 @@ public class RaffleTicketService {
     }
 
     /**
+     * Cancela una reserva pendiente de pago y libera los boletos inmediatamente a AVAILABLE.
+     */
+    @Transactional
+    public List<RaffleTicketResponse> cancelCheckout(String paymentIntentId,
+                                                     String userId,
+                                                     HttpServletRequest httpRequest) {
+        List<RaffleTicket> tickets = ticketRepository.findByPaymentIntentId(paymentIntentId);
+        if (tickets.isEmpty()) {
+            return List.of();
+        }
+
+        RaffleTicket sampleTicket = tickets.get(0);
+        boolean isOwner = sampleTicket.getUserId() != null && sampleTicket.getUserId().equals(userId);
+        boolean isAdmin = userRepository.findByRoleName("admin").stream()
+                .anyMatch(u -> u.getId().equals(userId));
+
+        if (!isOwner && !isAdmin) {
+            throw new ValidationException("No tienes autorización para cancelar esta reserva de boletos");
+        }
+
+        if (sampleTicket.getStatus() == RaffleTicket.Status.SOLD) {
+            throw new ValidationException("Estos boletos ya fueron pagados y confirmados");
+        }
+
+        List<Integer> releasedNumbers = tickets.stream()
+                .map(RaffleTicket::getTicketNumber)
+                .sorted()
+                .toList();
+        String raffleId = sampleTicket.getRaffleId();
+
+        for (RaffleTicket ticket : tickets) {
+            if (ticket.getStatus() == RaffleTicket.Status.RESERVED) {
+                ticket.setStatus(RaffleTicket.Status.AVAILABLE);
+                ticket.setPaymentIntentId(null);
+                ticket.setUserId(null);
+                ticket.setReservedAt(null);
+                ticket.setExpiresAt(null);
+                ticket.setPaymentMethod(null);
+            }
+        }
+        ticketRepository.saveAll(tickets);
+        paymentService.cancelPayment(paymentIntentId);
+
+        auditService.log("CHECKOUT_CANCELLED", "RAFFLE", raffleId, userId,
+                null, Map.of(
+                        "paymentIntentId", paymentIntentId,
+                        "releasedTickets", releasedNumbers
+                ), httpRequest);
+
+        log.info("Reserva de checkout cancelada y boletos liberados: pi={} usuario={} boletos={}",
+                paymentIntentId, userId, releasedNumbers);
+
+        return tickets.stream()
+                .map(t -> RaffleTicketResponse.from(t, userId))
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Registra que el usuario eligió pagar vía OXXO y extiende la reserva de los boletos a 3 horas.
      */
     @Transactional
@@ -392,14 +473,11 @@ public class RaffleTicketService {
     }
 
     /**
-     * Lista todas las reservas OXXO / en efectivo pendientes de pago para el panel de administración.
+     * Limpia reservas expiradas y agrupa reservas activas por paymentIntentId para un método de pago.
      */
-    @Transactional
-    public List<PendingOxxoReservationDto> getPendingOxxoReservations() {
-        LocalDateTime now = LocalDateTime.now();
+    private Map<String, List<RaffleTicket>> collectActivePendingReservationsByMethod(String paymentMethod, LocalDateTime now) {
         List<RaffleTicket> reservedTickets = ticketRepository.findByStatus(RaffleTicket.Status.RESERVED);
 
-        // Limpiar reservas expiradas
         boolean modified = false;
         List<RaffleTicket> activeTickets = new ArrayList<>();
         for (RaffleTicket t : reservedTickets) {
@@ -411,7 +489,7 @@ public class RaffleTicketService {
                 t.setExpiresAt(null);
                 t.setPaymentMethod(null);
                 modified = true;
-            } else if ("OXXO".equalsIgnoreCase(t.getPaymentMethod()) && t.getPaymentIntentId() != null) {
+            } else if (paymentMethod.equalsIgnoreCase(t.getPaymentMethod()) && t.getPaymentIntentId() != null) {
                 activeTickets.add(t);
             }
         }
@@ -419,9 +497,179 @@ public class RaffleTicketService {
             ticketRepository.saveAll(reservedTickets);
         }
 
-        // Agrupar por paymentIntentId
-        Map<String, List<RaffleTicket>> groupedByPaymentIntent = activeTickets.stream()
+        return activeTickets.stream()
                 .collect(Collectors.groupingBy(RaffleTicket::getPaymentIntentId));
+    }
+
+    private String buildTransferReference(String paymentIntentId) {
+        String clean = paymentIntentId != null ? paymentIntentId.replaceAll("[^A-Za-z0-9]", "") : "000000";
+        String suffix = clean.length() > 6
+                ? clean.substring(clean.length() - 6).toUpperCase()
+                : clean.toUpperCase();
+        return "TRF-" + suffix;
+    }
+
+    /**
+     * Registra que el usuario eligió pagar vía Transferencia bancaria (SPEI) y aparta los boletos por 3 horas.
+     */
+    @Transactional
+    public TransferReservationResponse registerTransferReservation(String paymentIntentId,
+                                                                   String trackingReference,
+                                                                   String userId) {
+        List<RaffleTicket> tickets = ticketRepository.findByPaymentIntentId(paymentIntentId);
+        if (tickets.isEmpty()) {
+            throw new NotFoundException("No se encontraron boletos asociados a la orden " + paymentIntentId);
+        }
+
+        RaffleTicket sampleTicket = tickets.get(0);
+        if (sampleTicket.getUserId() == null || !sampleTicket.getUserId().equals(userId)) {
+            throw new ValidationException("No tienes autorización para gestionar esta reserva de boletos");
+        }
+
+        if (sampleTicket.getStatus() == RaffleTicket.Status.SOLD) {
+            throw new ValidationException("Estos boletos ya han sido comprados");
+        }
+
+        Raffle raffle = raffleRepository.findById(sampleTicket.getRaffleId())
+                .orElseThrow(() -> new NotFoundException("Rifa"));
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiresAt = now.plusHours(TRANSFER_RESERVATION_EXPIRATION_HOURS);
+
+        for (RaffleTicket ticket : tickets) {
+            ticket.setPaymentMethod("TRANSFER");
+            ticket.setExpiresAt(expiresAt);
+        }
+        ticketRepository.saveAll(tickets);
+
+        String referenceCode = buildTransferReference(paymentIntentId);
+        String cleanTracking = trackingReference != null && !trackingReference.isBlank()
+                ? trackingReference.trim()
+                : null;
+        paymentService.attachTransferMetadata(paymentIntentId, referenceCode, cleanTracking);
+
+        BigDecimal ticketPrice = raffle.getTicketPrice() != null ? raffle.getTicketPrice() : BigDecimal.ZERO;
+        BigDecimal totalAmount = ticketPrice.multiply(BigDecimal.valueOf(tickets.size()));
+
+        log.info("Reserva Transferencia SPEI registrada (3 horas): pi={} ref={} usuario={}",
+                paymentIntentId, referenceCode, userId);
+
+        return new TransferReservationResponse(
+                paymentIntentId,
+                "TRANSFER",
+                referenceCode,
+                cleanTracking,
+                transferBankName,
+                transferBeneficiary,
+                transferClabe,
+                transferAccountNumber,
+                totalAmount,
+                expiresAt,
+                TRANSFER_RESERVATION_EXPIRATION_HOURS * 60L,
+                tickets.stream().map(RaffleTicket::getTicketNumber).sorted().toList()
+        );
+    }
+
+    /**
+     * Lista todas las transferencias bancarias SPEI pendientes de validación (Vista Administrador).
+     */
+    @Transactional
+    public List<PendingTransferReservationDto> getPendingTransferReservations() {
+        LocalDateTime now = LocalDateTime.now();
+        Map<String, List<RaffleTicket>> groupedByPaymentIntent =
+                collectActivePendingReservationsByMethod("TRANSFER", now);
+
+        List<PendingTransferReservationDto> result = new ArrayList<>();
+
+        for (Map.Entry<String, List<RaffleTicket>> entry : groupedByPaymentIntent.entrySet()) {
+            String piId = entry.getKey();
+            List<RaffleTicket> group = entry.getValue();
+            if (group.isEmpty()) continue;
+
+            RaffleTicket sample = group.get(0);
+            Raffle raffle = raffleRepository.findById(sample.getRaffleId()).orElse(null);
+            if (raffle == null) continue;
+
+            User user = sample.getUserId() != null
+                    ? userRepository.findById(sample.getUserId()).orElse(null)
+                    : null;
+
+            List<Integer> ticketNumbers = group.stream()
+                    .map(RaffleTicket::getTicketNumber)
+                    .sorted()
+                    .toList();
+
+            BigDecimal ticketPrice = raffle.getTicketPrice() != null ? raffle.getTicketPrice() : BigDecimal.ZERO;
+            BigDecimal totalAmount = ticketPrice.multiply(BigDecimal.valueOf(group.size()));
+
+            LocalDateTime expiresAt = sample.getExpiresAt() != null
+                    ? sample.getExpiresAt()
+                    : (sample.getReservedAt() != null ? sample.getReservedAt().plusHours(TRANSFER_RESERVATION_EXPIRATION_HOURS) : now);
+
+            long minutesRemaining = java.time.Duration.between(now, expiresAt).toMinutes();
+            boolean isExpired = minutesRemaining <= 0;
+
+            Map<String, String> meta = paymentService.getPaymentMetadata(piId);
+            String referenceCode = meta.getOrDefault("transferReference", buildTransferReference(piId));
+            String trackingReference = meta.get("trackingReference");
+
+            result.add(new PendingTransferReservationDto(
+                    piId,
+                    raffle.getId(),
+                    raffle.getName(),
+                    user != null ? user.getId() : sample.getUserId(),
+                    user != null ? user.getName() : "Usuario desconocido",
+                    user != null ? user.getEmail() : "Sin correo",
+                    ticketNumbers,
+                    totalAmount,
+                    referenceCode,
+                    trackingReference,
+                    sample.getReservedAt(),
+                    expiresAt,
+                    Math.max(0, minutesRemaining),
+                    isExpired
+            ));
+        }
+
+        result.sort((a, b) -> {
+            if (a.reservedAt() == null || b.reservedAt() == null) return 0;
+            return b.reservedAt().compareTo(a.reservedAt());
+        });
+
+        return result;
+    }
+
+    /**
+     * Acredita una transferencia bancaria SPEI (por administrador) y confirma los boletos como SOLD.
+     */
+    @Transactional
+    public List<RaffleTicketResponse> confirmTransferPayment(String paymentIntentId,
+                                                             String adminUserId,
+                                                             HttpServletRequest httpRequest) {
+        List<RaffleTicket> tickets = ticketRepository.findByPaymentIntentId(paymentIntentId);
+        if (tickets.isEmpty()) {
+            throw new NotFoundException("No se encontraron boletos asociados a la transferencia " + paymentIntentId);
+        }
+
+        RaffleTicket sampleTicket = tickets.get(0);
+        if (sampleTicket.getStatus() == RaffleTicket.Status.SOLD) {
+            return tickets.stream()
+                    .map(t -> RaffleTicketResponse.from(t, adminUserId))
+                    .collect(Collectors.toList());
+        }
+
+        paymentService.simulatePaymentSuccess(paymentIntentId);
+        return confirmPurchase(paymentIntentId, adminUserId, httpRequest);
+    }
+
+    /**
+     * Lista todas las reservas OXXO / en efectivo pendientes de pago para el panel de administración.
+     */
+    @Transactional
+    public List<PendingOxxoReservationDto> getPendingOxxoReservations() {
+        LocalDateTime now = LocalDateTime.now();
+        Map<String, List<RaffleTicket>> groupedByPaymentIntent =
+                collectActivePendingReservationsByMethod("OXXO", now);
 
         List<PendingOxxoReservationDto> result = new ArrayList<>();
 
